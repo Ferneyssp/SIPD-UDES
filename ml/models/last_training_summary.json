@@ -1,0 +1,64 @@
+{
+  "version": "20260927221150",
+  "selected_algorithm": "logistic_regression",
+  "selection_metric": "f1",
+  "ranking": [
+    {
+      "algorithm": "logistic_regression",
+      "accuracy": 0.779,
+      "precision": 0.4824,
+      "recall": 0.5802,
+      "f1": 0.5268,
+      "roc_auc": 0.8084,
+      "confusion_matrix": {
+        "tn": 656,
+        "fp": 132,
+        "fn": 89,
+        "tp": 123
+      },
+      "threshold": 0.3,
+      "test_size": 1000,
+      "positive_rate_test": 0.212
+    },
+    {
+      "algorithm": "random_forest",
+      "accuracy": 0.769,
+      "precision": 0.4639,
+      "recall": 0.5755,
+      "f1": 0.5137,
+      "roc_auc": 0.8014,
+      "confusion_matrix": {
+        "tn": 647,
+        "fp": 141,
+        "fn": 90,
+        "tp": 122
+      },
+      "threshold": 0.3,
+      "test_size": 1000,
+      "positive_rate_test": 0.212
+    },
+    {
+      "algorithm": "xgboost",
+      "accuracy": 0.77,
+      "precision": 0.4646,
+      "recall": 0.5566,
+      "f1": 0.5064,
+      "roc_auc": 0.7883,
+      "confusion_matrix": {
+        "tn": 652,
+        "fp": 136,
+        "fn": 94,
+        "tp": 118
+      },
+      "threshold": 0.3,
+      "test_size": 1000,
+      "positive_rate_test": 0.212
+    }
+  ],
+  "saved_dirs": {
+    "logistic_regression": "/home/claude/sipd-udes/ml/models/logistic_regression_20260927221150",
+    "random_forest": "/home/claude/sipd-udes/ml/models/random_forest_20260927221150",
+    "xgboost": "/home/claude/sipd-udes/ml/models/xgboost_20260927221150"
+  },
+  "is_synthetic": true
+}

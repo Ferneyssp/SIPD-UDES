@@ -1,0 +1,32 @@
+# Secretos y entorno
+.env
+*.env.local
+backend/.env
+frontend/.env
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+backend/media/
+backend/staticfiles/
+.ipynb_checkpoints/
+
+# Node
+node_modules/
+frontend/dist/
+frontend/coverage/
+
+# Datos: NUNCA versionar datos reales
+data/raw/
+data/private/
+*.xlsx
+
+# SO / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

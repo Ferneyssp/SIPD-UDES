@@ -1,0 +1,71 @@
+# SIPD - ejecución completa: PostgreSQL + Django (API + inferencia ML) + React (Nginx)
+#   cp .env.example .env   (y complete SECRET_KEY, DB_PASSWORD, DEMO_PASSWORD)
+#   docker compose up --build
+#   Aplicación: http://localhost:5173   API: http://localhost:8000/api/
+#
+# No se usa un servicio de ML separado: la inferencia es liviana (modelo ya
+# entrenado cargado en memoria por el backend). El entrenamiento es un proceso
+# offline (ml/scripts/train.py) y no forma parte del ciclo de peticiones.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-sipd}
+      POSTGRES_USER: ${DB_USER:-sipd}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD en .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DEBUG: ${DEBUG:-False}
+      SECRET_KEY: ${SECRET_KEY:?Defina SECRET_KEY en .env}
+      ALLOWED_HOSTS: localhost,127.0.0.1,backend
+      DB_NAME: ${DB_NAME:-sipd}
+      DB_USER: ${DB_USER:-sipd}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      JWT_ACCESS_TOKEN_LIFETIME: ${JWT_ACCESS_TOKEN_LIFETIME:-30}
+      JWT_REFRESH_TOKEN_LIFETIME: ${JWT_REFRESH_TOKEN_LIFETIME:-1440}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      RISK_LOW_THRESHOLD: ${RISK_LOW_THRESHOLD:-0.30}
+      RISK_MEDIUM_THRESHOLD: ${RISK_MEDIUM_THRESHOLD:-0.60}
+      SECURE_COOKIES: "False"
+      SEED_DEMO: ${SEED_DEMO:-true}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-}
+    volumes:
+      - media_data:/app/media
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: /api
+        VITE_APP_NAME: ${VITE_APP_NAME:-SIPD}
+        VITE_INSTITUTION_NAME: ${VITE_INSTITUTION_NAME:-Institución de Educación Superior}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+volumes:
+  postgres_data:
+  media_data:

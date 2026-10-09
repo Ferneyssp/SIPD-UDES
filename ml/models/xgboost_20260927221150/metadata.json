@@ -1,0 +1,66 @@
+{
+  "name": "XGBoost",
+  "algorithm": "xgboost",
+  "version": "20260927221150",
+  "trained_at": "2026-09-28T03:11:50.116501+00:00",
+  "metrics": {
+    "accuracy": 0.77,
+    "precision": 0.4646,
+    "recall": 0.5566,
+    "f1": 0.5064,
+    "roc_auc": 0.7883,
+    "confusion_matrix": {
+      "tn": 652,
+      "fp": 136,
+      "fn": 94,
+      "tp": 118
+    },
+    "threshold": 0.3,
+    "test_size": 1000,
+    "positive_rate_test": 0.212
+  },
+  "selection_metric": "f1",
+  "selected": false,
+  "features": [
+    "semester",
+    "gpa",
+    "previous_gpa",
+    "gpa_change",
+    "credits_enrolled",
+    "credits_approved",
+    "credits_failed",
+    "failed_subjects",
+    "approval_rate",
+    "attendance_percentage",
+    "course_repetitions",
+    "works_while_studying",
+    "socioeconomic_stratum",
+    "financial_difficulty",
+    "motivation_level",
+    "program_code"
+  ],
+  "numeric_features": [
+    "semester",
+    "gpa",
+    "previous_gpa",
+    "gpa_change",
+    "credits_enrolled",
+    "credits_approved",
+    "credits_failed",
+    "failed_subjects",
+    "approval_rate",
+    "attendance_percentage",
+    "course_repetitions",
+    "works_while_studying",
+    "socioeconomic_stratum",
+    "financial_difficulty",
+    "motivation_level"
+  ],
+  "categorical_features": [
+    "program_code"
+  ],
+  "dataset_rows": 4000,
+  "is_synthetic": true,
+  "sklearn_version": "1.8.0",
+  "disclaimer": "Métricas calculadas sobre datos SINTÉTICOS con fines de prueba técnica; no representan resultados académicos reales."
+}
