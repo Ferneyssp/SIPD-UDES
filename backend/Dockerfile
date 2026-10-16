@@ -11,7 +11,6 @@ WORKDIR /app/backend
 
 RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
 
-COPY ml/requirements.txt /app/ml/requirements.txt
 COPY backend/requirements.txt /app/backend/requirements.txt
 RUN pip install -r /app/backend/requirements.txt
 

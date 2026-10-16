@@ -1,4 +1,5 @@
--r requirements.txt
+# Dependencias de ML: las mismas versiones que usa el backend en producción.
+-r ../backend/requirements.txt
 jupyterlab>=4
 matplotlib>=3.8
 nbformat>=5.10

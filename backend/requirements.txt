@@ -10,8 +10,8 @@ python-dotenv>=1.0,<2
 gunicorn>=22,<27
 whitenoise>=6.7,<7
 
-# Inferencia ML. Lista autocontenida (no usa -r ../ml/requirements.txt) porque en
-# Vercel el servicio "backend" se construye sólo con esta carpeta.
+# Machine Learning (inferencia en el backend y entrenamiento offline en ml/).
+# Lista autocontenida: en Vercel el servicio "backend" se construye sólo con esta carpeta.
 # scikit-learn fijo en la versión con la que se entrenaron los modelos de ml/models
 # (ver "sklearn_version" en metadata.json).
 numpy>=1.26,<3

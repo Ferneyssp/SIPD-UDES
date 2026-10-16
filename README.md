@@ -59,7 +59,7 @@ git clone <repositorio> sipd && cd sipd
 # Backend + ML
 python -m venv .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
-pip install -r backend/requirements.txt   # incluye ml/requirements.txt
+pip install -r backend/requirements.txt   # incluye las dependencias de ML
 
 # Frontend
 cd frontend && npm install && cd ..
@@ -169,7 +169,6 @@ Vite redirige `/api` hacia `VITE_PROXY_TARGET` (por defecto `http://localhost:80
 | Parte | Archivo | Comando |
 |---|---|---|
 | Backend | `backend/requirements.txt` | `pip install -r backend/requirements.txt` |
-| ML (inferencia/entrenamiento) | `ml/requirements.txt` | incluido en el anterior |
 | Notebooks | `ml/requirements-notebooks.txt` | `pip install -r ml/requirements-notebooks.txt` |
 | Frontend | `frontend/package.json` | `npm install` |
 
@@ -342,9 +341,15 @@ archivos del admin de Django (Vercel ejecuta `collectstatic` en el build del ser
 ### Pasos
 
 1. Suba el repositorio a GitHub (incluida la carpeta `backend/ml_models/` con los modelos entrenados).
-2. En [vercel.com/new](https://vercel.com/new) importe el repositorio. **No cambie** el *Root Directory* ni el
-   *Framework Preset*: los servicios se toman de `vercel.json`. (El primer despliegue fallará hasta definir
-   `SECRET_KEY`; es normal.)
+2. En [vercel.com/new](https://vercel.com/new) importe el repositorio con:
+   - **Root Directory**: la raíz del repositorio (`./`), no `backend/` ni `frontend/`.
+   - **Framework Preset**: **Services**. Vercel sólo usa el bloque `services` de `vercel.json` con este preset;
+     con otro preset lo ignora.
+   - **Servicios**: sólo `backend` (Django, carpeta `backend/`) y `frontend` (Vite, carpeta `frontend/`). Si la
+     pantalla propone un servicio `ml`, quítelo: `ml/` es entrenamiento offline y no se despliega.
+   - **Environment Variables**: agregue ya `SECRET_KEY` (y las demás del paso 4); sin ella el build del backend
+     falla.
+   - Rutas, *build commands* y *output directories*: no los configure en la pantalla; salen de `vercel.json`.
 3. En el proyecto, pestaña **Storage**, cree/conecte una base **Postgres (Neon)**. Esto define `DATABASE_URL`
    automáticamente.
 4. En **Settings → Environment Variables** agregue:

@@ -5,7 +5,8 @@
 **/node_modules/
 **/__pycache__/
 docs/
-ml/notebooks/
+# Entrenamiento offline: no es un servicio ni lo usa el backend en ejecución
+ml/
 backend/media/
 backend/staticfiles/
 frontend/dist/
