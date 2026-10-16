@@ -48,7 +48,8 @@ if ON_VERCEL:
     ]
 
 # --- Paquete de Machine Learning (carpeta ml/ del proyecto) -------------------
-ML_DIR = Path(env("ML_DIR", PROJECT_ROOT / "ml"))
+# En Vercel el servicio sólo incluye backend/: vercel_build.py copia el paquete a backend/_ml.
+ML_DIR = Path(env("ML_DIR") or (PROJECT_ROOT / "ml" if (PROJECT_ROOT / "ml").is_dir() else BASE_DIR / "_ml"))
 ML_MODELS_DIR = Path(env("ML_MODELS_DIR", ML_DIR / "models"))
 if str(ML_DIR) not in sys.path:
     sys.path.insert(0, str(ML_DIR))
@@ -111,8 +112,6 @@ if DATABASE_URL:
     # Funciones serverless: sin conexiones persistentes y compatibles con poolers (PgBouncer).
     DATABASES = {"default": dj_database_url.parse(DATABASE_URL, conn_max_age=0 if ON_VERCEL else 60)}
     DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = ON_VERCEL
-elif ON_VERCEL:
-    raise ImproperlyConfigured("Defina DATABASE_URL (PostgreSQL) en las variables de entorno de Vercel.")
 else:
     DATABASES = {
         "default": {

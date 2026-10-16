@@ -315,21 +315,31 @@ Los usuarios no se eliminan físicamente: se desactivan para conservar la trazab
 
 ## 17. Despliegue en Vercel
 
-El repositorio ya está listo para Vercel: un solo proyecto sirve el frontend (React, estático) y la API
-(Django como función Python en `api/index.py`) en el **mismo dominio**, así que no hace falta configurar CORS.
+El repositorio se despliega como **un proyecto de Vercel con servicios** (`services` en `vercel.json`),
+con un único dominio:
+
+| Servicio | Carpeta | Ruta pública | Qué es |
+|---|---|---|---|
+| `backend` | `backend/` | `/api/*`, `/admin/*`, `/static/*` | Django (preset `django`, función Python) |
+| `frontend` | `frontend/` | todo lo demás (`/*`) | React + Vite (estático, con *fallback* SPA a `index.html`) |
+
+`ml/` **no es un servicio**: es la librería de inferencia que Django importa en el mismo proceso. Como el
+servicio `backend` se construye sólo con su carpeta, `backend/vercel_build.py` copia `ml/sipd_ml` y
+`ml/models` a `backend/_ml/` durante el build. No hay *bindings*: el navegador llama a `/api` en el mismo dominio.
 
 | Archivo | Función |
 |---|---|
-| `vercel.json` | Build del frontend (`frontend/dist`) y reescrituras: `/api/*`, `/admin/*` y `/static/*` → Django; el resto → React |
-| `api/index.py` | Entrada WSGI. En cada arranque en frío aplica migraciones, registra los modelos ML y (opcional) carga datos demo |
-| `requirements.txt` (raíz) | Dependencias de la función Python (XGBoost sólo-CPU para respetar el límite de tamaño) |
+| `vercel.json` | Define los servicios y las reescrituras públicas |
+| `backend/config/vercel.py` | En cada arranque en frío: migraciones, registro de modelos ML y (opcional) datos demo |
+| `backend/requirements.txt` | Dependencias autocontenidas (XGBoost sólo-CPU, scikit-learn fijo en 1.9.0) |
 | `frontend/.env.production` | Nombre de la app e institución usados en el build |
 
 ### Pasos
 
 1. Suba el repositorio a GitHub (incluida la carpeta `ml/models/` con los modelos entrenados).
 2. En [vercel.com/new](https://vercel.com/new) importe el repositorio. **No cambie** el *Root Directory* ni el
-   *Framework Preset*: todo se toma de `vercel.json`.
+   *Framework Preset*: los servicios se toman de `vercel.json`. (El primer despliegue fallará hasta definir
+   `SECRET_KEY`; es normal.)
 3. En el proyecto, pestaña **Storage**, cree/conecte una base **Postgres (Neon)**. Esto define `DATABASE_URL`
    automáticamente.
 4. En **Settings → Environment Variables** agregue:
@@ -344,6 +354,8 @@ El repositorio ya está listo para Vercel: un solo proyecto sirve el frontend (R
    Opcionales: `RISK_LOW_THRESHOLD`, `RISK_MEDIUM_THRESHOLD`, `JWT_ACCESS_TOKEN_LIFETIME`,
    `JWT_REFRESH_TOKEN_LIFETIME`, `SEED_DEMO_STUDENTS` (120 por defecto), `AUTO_MIGRATE=false` para no migrar al arrancar.
 5. **Redeploy** (pestaña *Deployments*) para que tome las variables. Cada `git push` a `main` vuelve a desplegar.
+
+Para probar todo junto en local: `vercel dev`.
 
 Si no usa datos demo, cree el primer administrador desde su equipo apuntando a la base de Vercel:
 

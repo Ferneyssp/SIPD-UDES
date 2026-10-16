@@ -1,19 +1,25 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
-  "installCommand": "npm ci --prefix frontend",
-  "buildCommand": "npm run build --prefix frontend",
-  "outputDirectory": "frontend/dist",
-  "functions": {
-    "api/index.py": {
-      "maxDuration": 60,
-      "excludeFiles": "{frontend/**,docs/**,ml/notebooks/**,ml/tests/**,**/__pycache__/**,backend/media/**,backend/staticfiles/**,.venv/**}"
+  "services": {
+    "backend": {
+      "root": "backend",
+      "framework": "django",
+      "buildCommand": "python vercel_build.py",
+      "functions": {
+        "config/wsgi.py": { "maxDuration": 60 }
+      }
+    },
+    "frontend": {
+      "root": "frontend",
+      "framework": "vite",
+      "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
     }
   },
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/index" },
-    { "source": "/admin/:path*", "destination": "/api/index" },
-    { "source": "/static/:path*", "destination": "/api/index" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/api/(.*)", "destination": { "service": "backend" } },
+    { "source": "/admin", "destination": { "service": "backend" } },
+    { "source": "/admin/(.*)", "destination": { "service": "backend" } },
+    { "source": "/static/(.*)", "destination": { "service": "backend" } },
+    { "source": "/(.*)", "destination": { "service": "frontend" } }
   ]
 }

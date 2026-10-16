@@ -10,5 +10,14 @@ python-dotenv>=1.0,<2
 gunicorn>=22,<27
 whitenoise>=6.7,<7
 
-# Inferencia (debe coincidir con las versiones usadas para entrenar los modelos)
--r ../ml/requirements.txt
+# Inferencia ML. Lista autocontenida (no usa -r ../ml/requirements.txt) porque en
+# Vercel el servicio "backend" se construye sólo con esta carpeta.
+# scikit-learn fijo en la versión con la que se entrenaron los modelos de ml/models
+# (ver "sklearn_version" en metadata.json).
+numpy>=1.26,<3
+pandas>=2.2,<4
+scikit-learn==1.9.0
+joblib>=1.4,<2
+# Variante sólo-CPU de XGBoost (mismo módulo `xgboost`, sin dependencias CUDA):
+# mantiene la función dentro del límite de tamaño de Vercel.
+xgboost-cpu>=2.1,<4
