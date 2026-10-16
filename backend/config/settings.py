@@ -47,12 +47,9 @@ if ON_VERCEL:
         host for host in (env("VERCEL_URL"), env("VERCEL_BRANCH_URL"), env("VERCEL_PROJECT_PRODUCTION_URL")) if host
     ]
 
-# --- Paquete de Machine Learning (carpeta ml/ del proyecto) -------------------
-# En Vercel el servicio sólo incluye backend/: vercel_build.py copia el paquete a backend/_ml.
-ML_DIR = Path(env("ML_DIR") or (PROJECT_ROOT / "ml" if (PROJECT_ROOT / "ml").is_dir() else BASE_DIR / "_ml"))
-ML_MODELS_DIR = Path(env("ML_MODELS_DIR", ML_DIR / "models"))
-if str(ML_DIR) not in sys.path:
-    sys.path.insert(0, str(ML_DIR))
+# --- Machine Learning ----------------------------------------------------------
+# El paquete sipd_ml y los artefactos entrenados viven dentro de backend/.
+ML_MODELS_DIR = Path(env("ML_MODELS_DIR", BASE_DIR / "ml_models"))
 
 INSTALLED_APPS = [
     "django.contrib.admin",

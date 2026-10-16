@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
 
 from sipd_ml.config import MODEL_FEATURES  # noqa: E402
 from sipd_ml.features import build_feature_row, compute_approval_rate, compute_gpa_change  # noqa: E402

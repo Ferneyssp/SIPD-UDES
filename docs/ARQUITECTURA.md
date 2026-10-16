@@ -22,8 +22,9 @@
 Decisiones:
 
 - **Paquete `sipd_ml` compartido**: entrenamiento e inferencia importan las mismas definiciones de variables
-  (`config.py`) y la misma función de variables derivadas (`features.py`). El backend añade `ml/` al
-  `sys.path` (variable `ML_DIR`), sin duplicar código.
+  (`config.py`) y la misma función de variables derivadas (`features.py`). El paquete vive en
+  `backend/sipd_ml` (importable directamente por Django) y los scripts de `ml/` lo importan desde ahí, sin
+  duplicar código.
 - **Umbrales centralizados**: `backend/config/risk.py` es la única fuente; el frontend los lee de `/api/config/`.
 - **Predicciones inmutables**: cada ejecución crea un registro; la anterior del mismo estudiante/periodo pasa a
   estado `REEMPLAZADA`.
@@ -112,7 +113,7 @@ Ejemplo de respuesta de `POST /api/predictions/`:
 
 ## 5. Extender el sistema
 
-- **Nueva variable del modelo**: agregarla a `ml/sipd_ml/config.py` (+ etiqueta), al modelo `AcademicRecord`,
+- **Nueva variable del modelo**: agregarla a `backend/sipd_ml/config.py` (+ etiqueta), al modelo `AcademicRecord`,
   a `AcademicRecord.to_model_input`, al validador CSV y reentrenar.
 - **Cambiar umbrales**: variables `RISK_LOW_THRESHOLD` / `RISK_MEDIUM_THRESHOLD`. Las predicciones existentes
   conservan el nivel con que se generaron; ejecute un nuevo proceso de predicción para reclasificar.

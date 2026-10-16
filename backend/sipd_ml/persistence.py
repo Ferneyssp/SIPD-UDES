@@ -2,10 +2,10 @@
 Guardado y carga de artefactos de modelo.
 
 Estructura en disco:
-    ml/models/<algoritmo>_<version>/model.joblib
-    ml/models/<algoritmo>_<version>/preprocessor.joblib
-    ml/models/<algoritmo>_<version>/metadata.json
-    ml/models/model.joblib, preprocessor.joblib, metadata.json  -> copia del modelo seleccionado
+    backend/ml_models/<algoritmo>_<version>/model.joblib
+    backend/ml_models/<algoritmo>_<version>/preprocessor.joblib
+    backend/ml_models/<algoritmo>_<version>/metadata.json
+    backend/ml_models/model.joblib, preprocessor.joblib, metadata.json  -> copia del modelo seleccionado
 """
 from __future__ import annotations
 
@@ -62,7 +62,7 @@ def save_artifacts(target_dir: Path, estimator, preprocessor, metadata: dict[str
 
 
 def publish_as_default(source_dir: Path, models_dir: Path = MODELS_DIR) -> None:
-    """Copia el modelo seleccionado a la raíz de ml/models/."""
+    """Copia el modelo seleccionado a la raíz de backend/ml_models/."""
     for filename in (MODEL_FILENAME, PREPROCESSOR_FILENAME, METADATA_FILENAME):
         shutil.copy2(source_dir / filename, models_dir / filename)
 

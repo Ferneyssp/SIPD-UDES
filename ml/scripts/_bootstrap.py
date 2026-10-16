@@ -1,7 +1,7 @@
-"""Agrega la carpeta ml/ al sys.path para poder importar sipd_ml desde los scripts."""
+"""Agrega la carpeta backend/ al sys.path para poder importar sipd_ml desde los scripts."""
 import sys
 from pathlib import Path
 
-ML_DIR = Path(__file__).resolve().parent.parent
-if str(ML_DIR) not in sys.path:
-    sys.path.insert(0, str(ML_DIR))
+BACKEND_DIR = Path(__file__).resolve().parents[2] / "backend"
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))

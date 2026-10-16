@@ -9,9 +9,11 @@ aplicado en producción sea exactamente el mismo que en entrenamiento.
 from pathlib import Path
 
 # --- Rutas -------------------------------------------------------------------
-ML_ROOT = Path(__file__).resolve().parent.parent
-MODELS_DIR = ML_ROOT / "models"
-PROJECT_ROOT = ML_ROOT.parent
+# El paquete vive en backend/ para que el servicio Django (Vercel/Docker) lo incluya
+# junto con los artefactos entrenados (backend/ml_models).
+BACKEND_ROOT = Path(__file__).resolve().parent.parent
+MODELS_DIR = BACKEND_ROOT / "ml_models"
+PROJECT_ROOT = BACKEND_ROOT.parent
 SAMPLE_DATA_DIR = PROJECT_ROOT / "data" / "sample"
 SYNTHETIC_DATASET_PATH = SAMPLE_DATA_DIR / "synthetic_training_dataset.csv"
 

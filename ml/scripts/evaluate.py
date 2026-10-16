@@ -2,7 +2,7 @@
 Evalúa un modelo guardado sobre un dataset etiquetado.
 
 Uso:
-    python ml/scripts/evaluate.py --model-dir ml/models --data data/sample/synthetic_training_dataset.csv
+    python ml/scripts/evaluate.py --model-dir backend/ml_models --data data/sample/synthetic_training_dataset.csv
 """
 import argparse
 import json

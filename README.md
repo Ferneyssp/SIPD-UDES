@@ -97,7 +97,7 @@ python -c "import secrets; print(secrets.token_urlsafe(50))"   # genera SECRET_K
 | `RISK_LOW_THRESHOLD`, `RISK_MEDIUM_THRESHOLD` | **Umbrales de riesgo** (0.30 / 0.60 por defecto) |
 | `GPA_MIN`, `GPA_MAX` | Escala de promedio institucional (0–5) |
 | `UPLOAD_MAX_BYTES`, `UPLOAD_MAX_ROWS` | Límites de carga CSV |
-| `ML_MODELS_DIR` | Carpeta de modelos (por defecto `ml/models`) |
+| `ML_MODELS_DIR` | Carpeta de modelos (por defecto `backend/ml_models`) |
 | `DEMO_PASSWORD` | Contraseña de los usuarios demo creados por `seed_demo` |
 | `VITE_API_URL` (frontend) | URL de la API (`/api` usa el proxy de Vite) |
 | `VITE_APP_NAME`, `VITE_INSTITUTION_NAME` (frontend) | Identidad institucional mostrada |
@@ -151,7 +151,7 @@ Comandos útiles:
 
 | Comando | Qué hace |
 |---|---|
-| `python manage.py sync_models` | Registra en BD los modelos de `ml/models/` |
+| `python manage.py sync_models` | Registra en BD los modelos de `backend/ml_models/` |
 | `python manage.py run_predictions --period 2026-2` | Genera predicciones de un periodo |
 | `python manage.py seed_demo` | Carga datos sintéticos de demostración |
 
@@ -178,7 +178,7 @@ Vite redirige `/api` hacia `VITE_PROXY_TARGET` (por defecto `http://localhost:80
 El pipeline vive en `ml/` y está **separado** del backend y del frontend:
 
 ```
-ML Training (ml/scripts/train.py) → Saved Model (ml/models/*.joblib) → Inference Service (sipd_ml.inference)
+ML Training (ml/scripts/train.py) → Saved Model (backend/ml_models/*.joblib) → Inference Service (sipd_ml.inference)
       → Django API (backend/ml/services.py) → React
 ```
 
@@ -194,8 +194,8 @@ cd backend && python manage.py sync_models        # registra versiones; activa l
 
 - **Preprocesamiento**: `ColumnTransformer` (imputación de faltantes, escalamiento, one-hot) ajustado sólo
   con datos de entrenamiento y guardado como `preprocessor.joblib`; en inferencia se usa el **mismo objeto**.
-- **Artefactos**: `ml/models/<algoritmo>_<versión>/{model.joblib, preprocessor.joblib, metadata.json}` y una
-  copia del seleccionado en `ml/models/`.
+- **Artefactos**: `backend/ml_models/<algoritmo>_<versión>/{model.joblib, preprocessor.joblib, metadata.json}` y una
+  copia del seleccionado en `backend/ml_models/`.
 - **Selección**: no se asume un modelo ganador; se ordena por la métrica elegida (F1 por defecto), con ROC-AUC y
   Recall como desempate. Accuracy se reporta pero **no** se usa como criterio único. El administrador puede
   activar otra versión desde *Predicciones → Modelos disponibles*.
@@ -213,7 +213,7 @@ cd backend && python manage.py sync_models        # registra versiones; activa l
 Notebooks (`ml/notebooks/`): `01_exploracion`, `02_preprocesamiento`, `03_entrenamiento`, `04_evaluacion`,
 `05_guardado_modelo` (se regeneran con `python ml/scripts/build_notebooks.py`).
 
-Variables del modelo (definidas en `ml/sipd_ml/config.py`): programa, semestre, promedio, promedio anterior,
+Variables del modelo (definidas en `backend/sipd_ml/config.py`): programa, semestre, promedio, promedio anterior,
 variación del promedio, créditos matriculados/aprobados/reprobados, asignaturas perdidas, tasa de aprobación,
 asistencia, asignaturas repetidas y variables opcionales de encuesta (trabaja, estrato, dificultad financiera,
 motivación). El riesgo previo se almacena en el historial pero **no** es variable de entrada, para evitar que el
@@ -271,16 +271,16 @@ docker compose up --build
 │   ├── students/       estudiantes, ámbito por rol, seed_demo
 │   ├── predictions/    predicciones, historial, resumen de Inicio
 │   ├── ml/             versiones de modelo y servicio de inferencia
+│   ├── sipd_ml/        pipeline ML: preprocesamiento, entrenamiento, evaluación, inferencia
+│   ├── ml_models/      artefactos .joblib + metadata.json
 │   ├── uploads/        carga y validación CSV
 │   ├── followups/      seguimiento / intervenciones
 │   └── audit/          auditoría de acciones
 ├── frontend/           React + Vite
 │   └── src/{components,pages,layouts,services,hooks,context,utils,config,styles,test}
-├── ml/
-│   ├── sipd_ml/        preprocesamiento, entrenamiento, evaluación, inferencia
+├── ml/                 entrenamiento offline (importa backend/sipd_ml)
 │   ├── scripts/        train, evaluate, generate_* , build_notebooks
 │   ├── notebooks/      01–05
-│   ├── models/         artefactos .joblib + metadata.json
 │   └── tests/
 ├── data/sample/        datos SINTÉTICOS
 ├── docs/ARQUITECTURA.md
@@ -323,9 +323,14 @@ con un único dominio:
 | `backend` | `backend/` | `/api/*`, `/admin/*`, `/static/*` | Django (preset `django`, función Python) |
 | `frontend` | `frontend/` | todo lo demás (`/*`) | React + Vite (estático, con *fallback* SPA a `index.html`) |
 
-`ml/` **no es un servicio**: es la librería de inferencia que Django importa en el mismo proceso. Como el
-servicio `backend` se construye sólo con su carpeta, `backend/vercel_build.py` copia `ml/sipd_ml` y
-`ml/models` a `backend/_ml/` durante el build. No hay *bindings*: el navegador llama a `/api` en el mismo dominio.
+El ML **no es un servicio**: el paquete `backend/sipd_ml` y los artefactos `backend/ml_models` viven dentro
+del servicio `backend` y Django los importa en el mismo proceso (el modelo se carga una vez por instancia y
+nunca se reentrena en una petición). Están dentro de `backend/` porque Vercel construye cada servicio a partir
+de su carpeta `root` y no documenta que se incluyan carpetas hermanas como `ml/`. No hay *bindings*: el
+navegador llama a `/api` en el mismo dominio, por lo que tampoco hace falta CORS.
+
+`/admin` exige iniciar sesión con un usuario `is_staff` (sólo el rol Administrador). `/static` sirve los
+archivos del admin de Django (Vercel ejecuta `collectstatic` en el build del servicio `backend`).
 
 | Archivo | Función |
 |---|---|
@@ -336,7 +341,7 @@ servicio `backend` se construye sólo con su carpeta, `backend/vercel_build.py` 
 
 ### Pasos
 
-1. Suba el repositorio a GitHub (incluida la carpeta `ml/models/` con los modelos entrenados).
+1. Suba el repositorio a GitHub (incluida la carpeta `backend/ml_models/` con los modelos entrenados).
 2. En [vercel.com/new](https://vercel.com/new) importe el repositorio. **No cambie** el *Root Directory* ni el
    *Framework Preset*: los servicios se toman de `vercel.json`. (El primer despliegue fallará hasta definir
    `SECRET_KEY`; es normal.)
@@ -368,6 +373,11 @@ DATABASE_URL="<url de Neon>" SECRET_KEY=x python manage.py createsuperuser
 
 - La carga de CSV admite hasta **4 MB** (límite de Vercel de 4,5 MB por petición). El archivo se guarda en la
   base de datos, no en disco (el disco de las funciones es temporal).
-- El entrenamiento de modelos sigue siendo **offline** (`ml/scripts/train.py`): entrene en local, haga commit de
-  `ml/models/` y haga push.
+- El entrenamiento de modelos sigue siendo **offline** (`python ml/scripts/train.py`, que escribe en
+  `backend/ml_models/`): entrene en local, haga commit y haga push.
+- Los modelos se cargan con la versión fijada de scikit-learn (1.9.0, la usada al entrenar). Si reentrena con
+  otra versión, actualice `backend/requirements.txt`.
+- Supuesto no verificado en Vercel: la detección automática del preset `django` (lee `manage.py` y
+  `WSGI_APPLICATION`) y la ejecución de `collectstatic`. Se probó localmente el build de producción, no un
+  despliegue real.
 - La primera petición tras un periodo de inactividad tarda más (arranque en frío: carga de Django y del modelo).

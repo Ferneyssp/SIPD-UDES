@@ -4,8 +4,7 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    ML_DIR=/app/ml \
-    ML_MODELS_DIR=/app/ml/models \
+    ML_MODELS_DIR=/app/backend/ml_models \
     MEDIA_ROOT=/app/media
 
 WORKDIR /app/backend

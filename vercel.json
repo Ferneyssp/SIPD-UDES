@@ -4,7 +4,6 @@
     "backend": {
       "root": "backend",
       "framework": "django",
-      "buildCommand": "python vercel_build.py",
       "functions": {
         "config/wsgi.py": { "maxDuration": 60 }
       }

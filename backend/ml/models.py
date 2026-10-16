@@ -2,7 +2,7 @@ from django.db import models, transaction
 
 
 class ModelVersion(models.Model):
-    """Versión registrada de un modelo entrenado (artefactos en ml/models/<dir>)."""
+    """Versión registrada de un modelo entrenado (artefactos en backend/ml_models/<dir>)."""
 
     name = models.CharField(max_length=80)
     algorithm = models.CharField(max_length=40)

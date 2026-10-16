@@ -6,7 +6,7 @@ import nbformat as nbf
 NB_DIR = Path(__file__).resolve().parent.parent / "notebooks"
 SETUP = """import sys
 from pathlib import Path
-sys.path.insert(0, str(Path.cwd().parent))  # carpeta ml/
+sys.path.insert(0, str(Path.cwd().parent.parent / "backend"))  # sipd_ml vive en backend/
 import pandas as pd
 from sipd_ml import config
 pd.set_option("display.max_columns", 30)"""
@@ -84,7 +84,7 @@ ranking[['accuracy', 'precision', 'recall', 'f1', 'roc_auc']]"""),
                "coherente con el inicio del nivel de riesgo Medio)."),
     ],
     "05_guardado_modelo.ipynb": [
-        ("md", "# 05 · Guardado del modelo\nEjecuta el pipeline completo y guarda los artefactos versionados en `ml/models/`. "
+        ("md", "# 05 · Guardado del modelo\nEjecuta el pipeline completo y guarda los artefactos versionados en `backend/ml_models/`. "
                "Equivale a `python ml/scripts/train.py`. Después ejecute `python manage.py sync_models` en el backend.\n\n" + WARNING),
         ("code", SETUP),
         ("code", """from sipd_ml.pipeline import run_training_pipeline
