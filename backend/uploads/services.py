@@ -28,7 +28,7 @@ def create_validated_upload(uploaded_file, user) -> DataUpload:
     raw = uploaded_file.read()
     checksum = hashlib.sha256(raw).hexdigest()
     uploaded_file.seek(0)
-    upload = DataUpload(uploaded_by=user, filename=uploaded_file.name[:255], checksum=checksum)
+    upload = DataUpload(uploaded_by=user, filename=uploaded_file.name[:255], checksum=checksum, content=raw)
     try:
         report = validate_csv(raw, active_program_codes())
     except FileRejected as exc:
@@ -96,8 +96,11 @@ def _upsert_rows(rows: list[dict], upload: DataUpload) -> list[AcademicRecord]:
 def confirm_upload(upload: DataUpload, user, run_predictions: bool = True) -> DataUpload:
     if upload.status != UploadStatus.VALIDATED:
         raise FileRejected("Sólo se pueden confirmar cargas en estado 'Validado'.")
-    with upload.file.open("rb") as handle:
-        raw = handle.read()
+    if upload.content is not None:
+        raw = bytes(upload.content)
+    else:
+        with upload.file.open("rb") as handle:
+            raw = handle.read()
     if hashlib.sha256(raw).hexdigest() != upload.checksum:
         raise FileRejected("El archivo almacenado fue modificado después de la validación.")
     report = validate_csv(raw, active_program_codes())

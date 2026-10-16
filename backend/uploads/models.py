@@ -12,6 +12,8 @@ class UploadStatus(models.TextChoices):
 class DataUpload(models.Model):
     uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="uploads")
     file = models.FileField(upload_to="uploads/%Y/%m/")
+    # Copia del CSV en BD: en despliegues serverless (Vercel) el disco no persiste entre peticiones.
+    content = models.BinaryField(null=True, blank=True, editable=False)
     filename = models.CharField(max_length=255)
     checksum = models.CharField(max_length=64)
     records_found = models.PositiveIntegerField(default=0)

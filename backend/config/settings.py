@@ -29,6 +29,9 @@ def env_list(name: str, default: str = "") -> list[str]:
     return [item.strip() for item in str(env(name, default)).split(",") if item.strip()]
 
 
+# Vercel define VERCEL=1 en el entorno de sus funciones.
+ON_VERCEL = env_bool("VERCEL", False)
+
 DEBUG = env_bool("DEBUG", False)
 SECRET_KEY = env("SECRET_KEY")
 if not SECRET_KEY:
@@ -38,6 +41,11 @@ if not SECRET_KEY:
         raise ImproperlyConfigured("SECRET_KEY es obligatorio cuando DEBUG=False.")
 
 ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", "localhost,127.0.0.1,backend")
+if ON_VERCEL:
+    # Dominios *.vercel.app del despliegue; los dominios propios se agregan en ALLOWED_HOSTS.
+    ALLOWED_HOSTS += [".vercel.app"] + [
+        host for host in (env("VERCEL_URL"), env("VERCEL_BRANCH_URL"), env("VERCEL_PROJECT_PRODUCTION_URL")) if host
+    ]
 
 # --- Paquete de Machine Learning (carpeta ml/ del proyecto) -------------------
 ML_DIR = Path(env("ML_DIR", PROJECT_ROOT / "ml"))
@@ -97,8 +105,14 @@ TEMPLATES = [
 ]
 
 # --- Base de datos: PostgreSQL ------------------------------------------------
-if env("DATABASE_URL"):
-    DATABASES = {"default": dj_database_url.parse(env("DATABASE_URL"), conn_max_age=60)}
+# En Vercel, la integración de Neon/Postgres define DATABASE_URL (o POSTGRES_URL).
+DATABASE_URL = env("DATABASE_URL") or env("POSTGRES_URL")
+if DATABASE_URL:
+    # Funciones serverless: sin conexiones persistentes y compatibles con poolers (PgBouncer).
+    DATABASES = {"default": dj_database_url.parse(DATABASE_URL, conn_max_age=0 if ON_VERCEL else 60)}
+    DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = ON_VERCEL
+elif ON_VERCEL:
+    raise ImproperlyConfigured("Defina DATABASE_URL (PostgreSQL) en las variables de entorno de Vercel.")
 else:
     DATABASES = {
         "default": {
@@ -128,7 +142,10 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "media/"
-MEDIA_ROOT = Path(env("MEDIA_ROOT", BASE_DIR / "media"))
+MEDIA_ROOT = Path(env("MEDIA_ROOT", "/tmp/sipd-media" if ON_VERCEL else BASE_DIR / "media"))
+if ON_VERCEL:
+    # Sistema de archivos de sólo lectura: WhiteNoise sirve los estáticos sin collectstatic.
+    WHITENOISE_USE_FINDERS = True
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # --- API REST -----------------------------------------------------------------
@@ -169,7 +186,8 @@ GPA_MIN = float(env("GPA_MIN", "0.0"))
 GPA_MAX = float(env("GPA_MAX", "5.0"))
 
 # --- Carga de archivos --------------------------------------------------------
-UPLOAD_MAX_BYTES = int(env("UPLOAD_MAX_BYTES", str(5 * 1024 * 1024)))
+# Vercel limita el cuerpo de las peticiones a 4,5 MB.
+UPLOAD_MAX_BYTES = int(env("UPLOAD_MAX_BYTES", str((4 if ON_VERCEL else 5) * 1024 * 1024)))
 UPLOAD_MAX_ROWS = int(env("UPLOAD_MAX_ROWS", "50000"))
 FILE_UPLOAD_MAX_MEMORY_SIZE = UPLOAD_MAX_BYTES
 DATA_UPLOAD_MAX_MEMORY_SIZE = UPLOAD_MAX_BYTES + 1024 * 1024
@@ -181,6 +199,8 @@ if not DEBUG:
     SESSION_COOKIE_SECURE = env_bool("SECURE_COOKIES", True)
     CSRF_COOKIE_SECURE = env_bool("SECURE_COOKIES", True)
     SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", False)
+if ON_VERCEL:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 LOGGING = {
     "version": 1,

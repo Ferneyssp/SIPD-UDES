@@ -22,6 +22,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    ports:
+      - "127.0.0.1:5432:5432"
 
   backend:
     build:

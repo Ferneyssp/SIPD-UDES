@@ -1,0 +1,11 @@
+# Archivos que no se suben a Vercel (no se usan en el build ni en la API)
+.env
+**/.env
+.venv/
+**/node_modules/
+**/__pycache__/
+docs/
+ml/notebooks/
+backend/media/
+backend/staticfiles/
+frontend/dist/

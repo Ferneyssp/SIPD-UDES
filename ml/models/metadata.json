@@ -1,23 +1,23 @@
 {
   "name": "Regresión Logística",
   "algorithm": "logistic_regression",
-  "version": "20260927221150",
-  "trained_at": "2026-09-28T03:11:50.047459+00:00",
+  "version": "20261011161613",
+  "trained_at": "2026-10-11T21:16:13.074254+00:00",
   "metrics": {
-    "accuracy": 0.779,
-    "precision": 0.4824,
-    "recall": 0.5802,
-    "f1": 0.5268,
-    "roc_auc": 0.8084,
+    "accuracy": 0.848,
+    "precision": 0.6944,
+    "recall": 0.7576,
+    "f1": 0.7246,
+    "roc_auc": 0.889,
     "confusion_matrix": {
-      "tn": 656,
-      "fp": 132,
-      "fn": 89,
-      "tp": 123
+      "tn": 81,
+      "fp": 11,
+      "fn": 8,
+      "tp": 25
     },
     "threshold": 0.3,
-    "test_size": 1000,
-    "positive_rate_test": 0.212
+    "test_size": 125,
+    "positive_rate_test": 0.264
   },
   "selection_metric": "f1",
   "selected": true,
@@ -59,8 +59,8 @@
   "categorical_features": [
     "program_code"
   ],
-  "dataset_rows": 4000,
-  "is_synthetic": true,
-  "sklearn_version": "1.8.0",
-  "disclaimer": "Métricas calculadas sobre datos SINTÉTICOS con fines de prueba técnica; no representan resultados académicos reales."
+  "dataset_rows": 500,
+  "is_synthetic": false,
+  "sklearn_version": "1.9.0",
+  "disclaimer": ""
 }

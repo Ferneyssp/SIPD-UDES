@@ -39,7 +39,7 @@ class DataUploadViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins
       GET  /api/uploads/template/   -> plantilla CSV.
     """
 
-    queryset = DataUpload.objects.select_related("uploaded_by")
+    queryset = DataUpload.objects.select_related("uploaded_by").defer("content")
     permission_classes = [IsAdminRole]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     ordering_fields = ["upload_date"]

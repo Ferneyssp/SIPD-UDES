@@ -38,6 +38,7 @@ Usuarios (Admin) · Perfil · Cerrar sesión. **No existe** módulo "Dashboard" 
 14. [Estructura del proyecto](#14-estructura-del-proyecto)
 15. [Roles y permisos](#15-roles-y-permisos)
 16. [Privacidad y seguridad](#16-privacidad-y-seguridad)
+17. [Despliegue en Vercel](#17-despliegue-en-vercel)
 
 ---
 
@@ -311,3 +312,50 @@ Los usuarios no se eliminan físicamente: se desactivan para conservar la trazab
 - Auditoría de inicios de sesión, cargas, predicciones, cambios de usuarios y seguimientos, sin datos
   sensibles en los registros.
 - Secretos sólo en variables de entorno; `.env` excluido de Git.
+
+## 17. Despliegue en Vercel
+
+El repositorio ya está listo para Vercel: un solo proyecto sirve el frontend (React, estático) y la API
+(Django como función Python en `api/index.py`) en el **mismo dominio**, así que no hace falta configurar CORS.
+
+| Archivo | Función |
+|---|---|
+| `vercel.json` | Build del frontend (`frontend/dist`) y reescrituras: `/api/*`, `/admin/*` y `/static/*` → Django; el resto → React |
+| `api/index.py` | Entrada WSGI. En cada arranque en frío aplica migraciones, registra los modelos ML y (opcional) carga datos demo |
+| `requirements.txt` (raíz) | Dependencias de la función Python (XGBoost sólo-CPU para respetar el límite de tamaño) |
+| `frontend/.env.production` | Nombre de la app e institución usados en el build |
+
+### Pasos
+
+1. Suba el repositorio a GitHub (incluida la carpeta `ml/models/` con los modelos entrenados).
+2. En [vercel.com/new](https://vercel.com/new) importe el repositorio. **No cambie** el *Root Directory* ni el
+   *Framework Preset*: todo se toma de `vercel.json`.
+3. En el proyecto, pestaña **Storage**, cree/conecte una base **Postgres (Neon)**. Esto define `DATABASE_URL`
+   automáticamente.
+4. En **Settings → Environment Variables** agregue:
+
+   | Variable | Valor |
+   |---|---|
+   | `SECRET_KEY` | Obligatoria. `python -c "import secrets; print(secrets.token_urlsafe(50))"` |
+   | `SEED_DEMO` | `true` para crear usuarios y datos **sintéticos** de demostración en el primer arranque |
+   | `DEMO_PASSWORD` | Contraseña de los usuarios demo (`admin`, `coordinador`, `profesor`, `profesor2`). Obligatoria si `SEED_DEMO=true` |
+   | `ALLOWED_HOSTS` | Opcional: dominios propios (los `*.vercel.app` ya están permitidos) |
+
+   Opcionales: `RISK_LOW_THRESHOLD`, `RISK_MEDIUM_THRESHOLD`, `JWT_ACCESS_TOKEN_LIFETIME`,
+   `JWT_REFRESH_TOKEN_LIFETIME`, `SEED_DEMO_STUDENTS` (120 por defecto), `AUTO_MIGRATE=false` para no migrar al arrancar.
+5. **Redeploy** (pestaña *Deployments*) para que tome las variables. Cada `git push` a `main` vuelve a desplegar.
+
+Si no usa datos demo, cree el primer administrador desde su equipo apuntando a la base de Vercel:
+
+```bash
+cd backend
+DATABASE_URL="<url de Neon>" SECRET_KEY=x python manage.py createsuperuser
+```
+
+### Limitaciones en Vercel
+
+- La carga de CSV admite hasta **4 MB** (límite de Vercel de 4,5 MB por petición). El archivo se guarda en la
+  base de datos, no en disco (el disco de las funciones es temporal).
+- El entrenamiento de modelos sigue siendo **offline** (`ml/scripts/train.py`): entrene en local, haga commit de
+  `ml/models/` y haga push.
+- La primera petición tras un periodo de inactividad tarda más (arranque en frío: carga de Django y del modelo).
