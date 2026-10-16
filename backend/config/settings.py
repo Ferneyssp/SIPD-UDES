@@ -38,7 +38,11 @@ if not SECRET_KEY:
     if DEBUG or "test" in sys.argv:
         SECRET_KEY = "insecure-dev-only-key-change-me"
     else:
-        raise ImproperlyConfigured("SECRET_KEY es obligatorio cuando DEBUG=False.")
+        raise ImproperlyConfigured(
+            "SECRET_KEY es obligatorio cuando DEBUG=False."
+            + (" Defínalo en Vercel: Settings > Environment Variables (Production y Preview) y vuelva a desplegar."
+               if ON_VERCEL else "")
+        )
 
 ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", "localhost,127.0.0.1,backend")
 if ON_VERCEL:

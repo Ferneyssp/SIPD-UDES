@@ -1,12 +1,13 @@
-# Archivos que no se suben a Vercel (no se usan en el build ni en la API)
-.env
+# Archivos que no se suben a Vercel (no se usan en el build ni en la API).
+# Las rutas empiezan con "/" para aplicarse sólo a la raíz del repositorio:
+# un patrón como "ml/" también excluiría backend/ml/ (la app Django de modelos).
 **/.env
-.venv/
+**/.venv/
 **/node_modules/
 **/__pycache__/
-docs/
+/docs/
 # Entrenamiento offline: no es un servicio ni lo usa el backend en ejecución
-ml/
-backend/media/
-backend/staticfiles/
-frontend/dist/
+/ml/
+/backend/media/
+/backend/staticfiles/
+/frontend/dist/
