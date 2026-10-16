@@ -34,15 +34,16 @@ ON_VERCEL = env_bool("VERCEL", False)
 
 DEBUG = env_bool("DEBUG", False)
 SECRET_KEY = env("SECRET_KEY")
+# En Vercel el build lee estos settings (detección de WSGI, collectstatic) sin garantía de recibir las
+# variables del proyecto; config/wsgi.py vuelve a exigir SECRET_KEY antes de atender peticiones.
+SECRET_KEY_MISSING = not SECRET_KEY
 if not SECRET_KEY:
     if DEBUG or "test" in sys.argv:
         SECRET_KEY = "insecure-dev-only-key-change-me"
+    elif ON_VERCEL:
+        SECRET_KEY = "vercel-build-only-placeholder"
     else:
-        raise ImproperlyConfigured(
-            "SECRET_KEY es obligatorio cuando DEBUG=False."
-            + (" Defínalo en Vercel: Settings > Environment Variables (Production y Preview) y vuelva a desplegar."
-               if ON_VERCEL else "")
-        )
+        raise ImproperlyConfigured("SECRET_KEY es obligatorio cuando DEBUG=False.")
 
 ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", "localhost,127.0.0.1,backend")
 if ON_VERCEL:
