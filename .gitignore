@@ -33,3 +33,6 @@ Thumbs.db
 
 # Vercel
 .vercel/
+
+# Resultados generados por ml/scripts/validate.py
+ml/results/

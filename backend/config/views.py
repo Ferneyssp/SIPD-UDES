@@ -42,4 +42,12 @@ class HealthView(APIView):
     authentication_classes = []
 
     def get(self, request):
-        return Response({"status": "ok"})
+        from django.db import connection
+
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+            database = "ok"
+        except Exception:  # noqa: BLE001 - sólo se informa el estado, sin detalles
+            database = "error"
+        return Response({"status": "ok", "database": database})

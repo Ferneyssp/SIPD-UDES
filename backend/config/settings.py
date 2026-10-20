@@ -108,12 +108,17 @@ TEMPLATES = [
 ]
 
 # --- Base de datos: PostgreSQL ------------------------------------------------
-# En Vercel, la integración de Neon/Postgres define DATABASE_URL (o POSTGRES_URL).
-DATABASE_URL = env("DATABASE_URL") or env("POSTGRES_URL")
+# En Vercel, la integración de Neon/Postgres define DATABASE_URL (o POSTGRES_URL), que pasa por
+# el pooler, y DATABASE_URL_UNPOOLED (conexión directa). Se prefiere la directa: el arranque usa un
+# candado de sesión de PostgreSQL que no funciona de forma fiable a través del pooler.
+DATABASE_URL = (env("DATABASE_URL_UNPOOLED") if ON_VERCEL else None) or env("DATABASE_URL") or env("POSTGRES_URL")
 if DATABASE_URL:
     # Funciones serverless: sin conexiones persistentes y compatibles con poolers (PgBouncer).
     DATABASES = {"default": dj_database_url.parse(DATABASE_URL, conn_max_age=0 if ON_VERCEL else 60)}
     DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = ON_VERCEL
+    if ON_VERCEL:
+        # Que un fallo de conexión se reporte rápido y no agote el tiempo máximo de la función.
+        DATABASES["default"].setdefault("OPTIONS", {})["connect_timeout"] = 10
 else:
     DATABASES = {
         "default": {

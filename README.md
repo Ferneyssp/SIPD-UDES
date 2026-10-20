@@ -188,6 +188,9 @@ python ml/scripts/train.py --select-by recall     # criterio: f1 | recall | roc_
 python ml/scripts/train.py --force-model random_forest
 python ml/scripts/train.py --data ruta/datos_institucionales.csv
 python ml/scripts/evaluate.py                     # evalúa el modelo guardado
+python ml/scripts/validate.py --data data/private/synthetic_students.csv --label C500 --figures
+                                                  # validación cruzada 5x5, línea base, calibración, umbrales
+                                                  # (resultados en ml/results/; --figures requiere matplotlib)
 cd backend && python manage.py sync_models        # registra versiones; activa la seleccionada
 ```
 
