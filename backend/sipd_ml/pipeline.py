@@ -6,11 +6,11 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import pandas as pd
 
-from .config import CLASSIFICATION_THRESHOLD, DEFAULT_SELECTION_METRIC, MODELS_DIR
+from .config import CLASSIFICATION_THRESHOLD, DEFAULT_SELECTION_METRIC, MODELS_DIR, RANDOM_STATE, TEST_SIZE
 from .evaluation import compare_models, evaluate_estimator
 from .persistence import build_metadata, publish_as_default, save_artifacts
 from .preprocessing import prepare_training_frame
@@ -26,19 +26,44 @@ def run_training_pipeline(
     models_dir: Path = MODELS_DIR,
     version: str | None = None,
     threshold: float = CLASSIFICATION_THRESHOLD,
+    publish_default: bool = True,
+    on_stage: Callable[..., None] | None = None,
+    extra_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """on_stage(etapa, **detalle) informa el avance real: "preparing", "training", "evaluating", "saving".
+    publish_default=False no toca la copia de la raíz de models_dir (reentrenamiento desde la web:
+    la versión nueva queda pendiente de aprobación y no reemplaza nada)."""
+    notify = on_stage or (lambda stage, **detail: None)
     is_synthetic = bool(dataset.get("is_synthetic", pd.Series([False])).any())
+    notify("preparing")
     features, target = prepare_training_frame(dataset)
     split = split_and_preprocess(features, target)
-    candidates = train_candidates(split, algorithms)
+    candidates = train_candidates(
+        split, algorithms,
+        on_progress=lambda algorithm, position, total: notify("training", algorithm=algorithm, position=position, total=total),
+    )
 
-    results = {c.algorithm: evaluate_estimator(c.estimator, split.x_test, split.y_test, threshold) for c in candidates}
+    results = {}
+    for position, candidate in enumerate(candidates, start=1):
+        notify("evaluating", algorithm=candidate.algorithm, position=position, total=len(candidates))
+        results[candidate.algorithm] = evaluate_estimator(candidate.estimator, split.x_test, split.y_test, threshold)
     ranking = compare_models(results, selection_metric)
     selected_algorithm = forced_algorithm or ranking[0]["algorithm"]
     if selected_algorithm not in results:
         raise ValueError(f"El algoritmo forzado '{selected_algorithm}' no fue entrenado.")
 
     version = version or datetime.now().strftime("%Y%m%d%H%M%S")
+    evaluation = {
+        "dataset": "test",
+        "test_fraction": TEST_SIZE,
+        "random_state": RANDOM_STATE,
+        "stratified": True,
+        "train_size": int(len(split.y_train)),
+        "test_size": int(len(split.y_test)),
+        "positive_rate_train": round(float(split.y_train.mean()), 4),
+        "threshold": threshold,
+    }
+    notify("saving")
     saved_dirs = {}
     for candidate in candidates:
         metadata = build_metadata(
@@ -49,11 +74,13 @@ def run_training_pipeline(
             selection_metric=selection_metric,
             dataset_rows=len(dataset),
             selected=candidate.algorithm == selected_algorithm,
+            extra={"evaluation": evaluation, **(extra_metadata or {})},
         )
         target_dir = Path(models_dir) / f"{candidate.algorithm}_{version}"
         saved_dirs[candidate.algorithm] = save_artifacts(target_dir, candidate.estimator, split.preprocessor, metadata)
 
-    publish_as_default(saved_dirs[selected_algorithm], Path(models_dir))
+    if publish_default:
+        publish_as_default(saved_dirs[selected_algorithm], Path(models_dir))
     return {
         "version": version,
         "selected_algorithm": selected_algorithm,
@@ -61,4 +88,5 @@ def run_training_pipeline(
         "ranking": ranking,
         "saved_dirs": {k: str(v) for k, v in saved_dirs.items()},
         "is_synthetic": is_synthetic,
+        "evaluation": evaluation,
     }

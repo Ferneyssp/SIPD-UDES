@@ -11,6 +11,7 @@ from audit.models import AuditAction
 from audit.services import log_action
 from config.risk import RiskLevel
 from ml.services import ModelNotAvailableError, model_status
+from notifications.services import notify_predictions_completed
 from students.models import Student
 from students.queries import annotate_current_risk, filter_by_followup_status
 from students.scoping import allowed_program_ids, scope_queryset, user_can_access_student
@@ -112,6 +113,7 @@ class PredictionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewse
             return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         log_action(AuditAction.PREDICTION_RUN, request=request, entity="AcademicPeriod", entity_id=period.code,
                    metadata={"count": total, "program": payload.validated_data.get("program") or "todos"})
+        notify_predictions_completed(request.user, period.code, total, program_ids)
         return Response({"detail": f"Se generaron {total} predicciones para {period.code}.", "predictions_generated": total})
 
     # ------------------------------------------------------------------ historial

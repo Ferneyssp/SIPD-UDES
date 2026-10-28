@@ -6,6 +6,8 @@ from rest_framework.response import Response
 
 from audit.models import AuditAction
 from audit.services import log_action
+from notifications.models import NotificationLevel, NotificationType
+from notifications.services import notify, notify_predictions_completed
 from users.permissions import IsAdminRole
 
 from .models import DataUpload
@@ -58,6 +60,10 @@ class DataUploadViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins
         log_action(AuditAction.DATA_UPLOAD, request=request, entity="DataUpload", entity_id=upload.pk,
                    description="Validación de archivo", metadata={"status": upload.status, "found": upload.records_found,
                                                                   "valid": upload.records_valid, "failed": upload.records_failed})
+        if upload.status != "VALIDADO":
+            notify([request.user], NotificationType.UPLOAD_REJECTED, f"Archivo rechazado: {upload.filename}", upload.message,
+                   level=NotificationLevel.WARNING, link="/carga-datos", entity="DataUpload", entity_id=upload.pk,
+                   dedupe_key=f"upload-{upload.pk}-rejected")
         code = status.HTTP_201_CREATED if upload.status == "VALIDADO" else status.HTTP_422_UNPROCESSABLE_ENTITY
         return Response(DataUploadSerializer(upload).data, status=code)
 
@@ -72,6 +78,10 @@ class DataUploadViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins
         log_action(AuditAction.DATA_UPLOAD, request=request, entity="DataUpload", entity_id=upload.pk,
                    description="Confirmación de carga", metadata={"processed": upload.records_processed,
                                                                   "predictions": upload.predictions_generated})
+        periods = sorted(set(upload.academic_records.values_list("academic_period__code", flat=True)))
+        notify_predictions_completed(request.user, ", ".join(periods), upload.predictions_generated,
+                                     list(upload.academic_records.values_list("student__program_id", flat=True).distinct()),
+                                     origin=f" a partir de la carga {upload.filename}")
         return Response(DataUploadSerializer(upload).data)
 
     @action(detail=False, methods=["get"])

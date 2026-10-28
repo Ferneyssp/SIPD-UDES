@@ -9,8 +9,11 @@ import HistorialPage from "./pages/HistorialPage";
 import InicioPage from "./pages/InicioPage";
 import LoginPage from "./pages/LoginPage";
 import NotFoundPage from "./pages/NotFoundPage";
+import NotificacionesPage from "./pages/NotificacionesPage";
 import PerfilPage from "./pages/PerfilPage";
 import PrediccionesPage from "./pages/PrediccionesPage";
+import ReentrenamientoPage from "./pages/ReentrenamientoPage";
+import ReportesPage from "./pages/ReportesPage";
 import SeguimientoPage from "./pages/SeguimientoPage";
 import UsuariosPage from "./pages/UsuariosPage";
 
@@ -36,9 +39,15 @@ export default function App() {
         <Route path="/predicciones" element={<PrediccionesPage />} />
         <Route path="/historial" element={<HistorialPage />} />
         <Route path="/seguimiento" element={<SeguimientoPage />} />
+        <Route path="/reportes" element={<ReportesPage />} />
+        <Route path="/notificaciones" element={<NotificacionesPage />} />
         <Route
           path="/carga-datos"
           element={<ProtectedRoute roles={[ROLES.ADMIN]}><CargaDatosPage /></ProtectedRoute>}
+        />
+        <Route
+          path="/reentrenamiento"
+          element={<ProtectedRoute roles={[ROLES.ADMIN]}><ReentrenamientoPage /></ProtectedRoute>}
         />
         <Route
           path="/usuarios"

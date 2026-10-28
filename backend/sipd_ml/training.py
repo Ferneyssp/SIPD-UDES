@@ -91,10 +91,13 @@ def available_algorithms() -> list[str]:
     return algorithms
 
 
-def train_candidates(split: DatasetSplit, algorithms: list[str] | None = None) -> list[TrainedCandidate]:
+def train_candidates(split: DatasetSplit, algorithms: list[str] | None = None, on_progress=None) -> list[TrainedCandidate]:
+    """on_progress(algorithm, posición, total) se invoca antes de ajustar cada candidato."""
     algorithms = algorithms or available_algorithms()
     candidates = []
-    for algorithm in algorithms:
+    for position, algorithm in enumerate(algorithms, start=1):
+        if on_progress:
+            on_progress(algorithm, position, len(algorithms))
         estimator = build_estimator(algorithm, split.y_train)
         estimator.fit(split.x_train, split.y_train)
         candidates.append(TrainedCandidate(algorithm=algorithm, estimator=estimator))

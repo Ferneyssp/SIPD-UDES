@@ -6,7 +6,8 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from academic.views import AcademicPeriodViewSet, ProgramViewSet
 from audit.views import AuditLogViewSet
 from followups.views import FollowUpViewSet, ResponsibleUsersView
-from ml.views import ModelVersionViewSet
+from ml.views import ModelVersionViewSet, TrainingDatasetViewSet, TrainingOverviewView, TrainingRunViewSet
+from notifications.views import NotificationViewSet
 from predictions.views import PredictionViewSet
 from students.views import StudentViewSet
 from uploads.views import DataUploadViewSet
@@ -24,6 +25,9 @@ router.register("models", ModelVersionViewSet, basename="model-version")
 router.register("uploads", DataUploadViewSet, basename="upload")
 router.register("followups", FollowUpViewSet, basename="followup")
 router.register("audit", AuditLogViewSet, basename="audit")
+router.register("training/datasets", TrainingDatasetViewSet, basename="training-dataset")
+router.register("training/runs", TrainingRunViewSet, basename="training-run")
+router.register("notifications", NotificationViewSet, basename="notification")
 
 auth_patterns = [
     path("login/", LoginView.as_view(), name="login"),
@@ -39,5 +43,7 @@ urlpatterns = [
     path("api/config/", SystemConfigView.as_view(), name="system-config"),
     path("api/health/", HealthView.as_view(), name="health"),
     path("api/followups/responsibles/", ResponsibleUsersView.as_view(), name="followup-responsibles"),
+    path("api/training/overview/", TrainingOverviewView.as_view(), name="training-overview"),
+    path("api/reports/", include("reports.urls")),
     path("api/", include(router.urls)),
 ]

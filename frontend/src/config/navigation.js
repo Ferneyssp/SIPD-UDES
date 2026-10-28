@@ -1,4 +1,4 @@
-import { Activity, BarChart3, ClipboardList, History, Home, UploadCloud, UserCircle, Users, UserCog } from "lucide-react";
+import { Activity, BarChart3, Bell, BrainCog, ClipboardList, FileBarChart2, History, Home, UploadCloud, UserCircle, Users, UserCog } from "lucide-react";
 import { ROLES } from "./appConfig";
 
 const ALL = [ROLES.ADMIN, ROLES.COORDINATOR, ROLES.PROFESSOR];
@@ -14,7 +14,9 @@ export const NAVIGATION = [
   { path: "/predicciones", label: "Predicciones", icon: BarChart3, roles: ALL },
   { path: "/historial", label: "Historial", icon: History, roles: ALL },
   { path: "/seguimiento", label: "Seguimiento", icon: Activity, roles: ALL },
+  { path: "/reportes", label: "Reportes", icon: FileBarChart2, roles: ALL },
   { path: "/carga-datos", label: "Carga de datos", icon: UploadCloud, roles: [ROLES.ADMIN] },
+  { path: "/reentrenamiento", label: "Reentrenamiento", icon: BrainCog, roles: [ROLES.ADMIN] },
   {
     path: "/usuarios",
     label: "Usuarios",
@@ -22,6 +24,7 @@ export const NAVIGATION = [
     roles: [ROLES.ADMIN],
     canAccess: (user) => Boolean(user?.can_manage_users_effective),
   },
+  { path: "/notificaciones", label: "Notificaciones", icon: Bell, roles: ALL },
   { path: "/perfil", label: "Perfil", icon: UserCircle, roles: ALL },
 ];
 
@@ -38,6 +41,9 @@ export const PAGE_META = {
   "/historial": { subtitle: "Evolución del riesgo estimado a través de los periodos académicos" },
   "/seguimiento": { subtitle: "Registro, control y acompañamiento de estudiantes identificados para seguimiento" },
   "/carga-datos": { subtitle: "Carga y validación de información académica en formato CSV" },
+  "/reportes": { subtitle: "Reportes de riesgo estimado, evaluación de modelos y actividad, con exportación PDF y CSV" },
+  "/reentrenamiento": { subtitle: "Reentrenamiento, evaluación, aprobación y activación de los modelos de Machine Learning" },
+  "/notificaciones": { subtitle: "Avisos de los procesos del sistema" },
   "/usuarios": { subtitle: "Administración de usuarios y roles del sistema" },
   "/perfil": { subtitle: "Información de la cuenta y seguridad" },
 };

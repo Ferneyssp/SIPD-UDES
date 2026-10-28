@@ -43,7 +43,11 @@ Decisiones:
 | `AcademicPeriod` | code (AAAA-T), year, term, start_date, end_date, is_current |
 | `Student` | anonymous_code (E001), program, semester, academic_status, current_period, is_active, timestamps |
 | `AcademicRecord` | student, academic_period, semester, gpa, credits_enrolled/approved/failed, failed_subjects, attendance_percentage, course_repetitions, variables de encuesta (nullable), extra_survey_data (JSON), source_upload |
-| `ModelVersion` | name, algorithm, version, metrics (JSON), trained_at, active, artifact_dir, is_synthetic |
+| `ModelVersion` | name, algorithm, version, metrics (JSON), trained_at, active, artifact_dir, is_synthetic, selected, dataset_rows, evaluation (JSON: conjunto, partición, tamaños), artifact_checksums (SHA-256), training_run, approval_status (PENDIENTE/APROBADO/RECHAZADO/NO_REQUERIDA), acceptance (JSON), approved_by, approved_at, approval_notes |
+| `TrainingDataset` | source (CARGA/REFERENCIA), filename, content (bytes), checksum, size_bytes, rows, status (VALIDO/RECHAZADO), report (JSON), is_synthetic, uploaded_by, created_at |
+| `TrainingRun` | dataset, requested_by, status (PENDIENTE…COMPLETADO/FALLIDO/CANCELADO), stage_message, events (JSON), algorithms, selection_metric, threshold, version, selected_algorithm, ranking, error_message, in_progress (restricción única parcial = una ejecución a la vez), created_at, started_at, finished_at, heartbeat_at |
+| `ModelActivationLog` | action (INICIAL/ACTIVACION/RECUPERACION), previous_version, new_version, etiquetas, performed_by, created_at |
+| `Notification` | recipient, type, level, title, message, link (ruta interna), entity, entity_id, dedupe_key (único por destinatario), created_at, read_at |
 | `Prediction` | student, academic_record, academic_period, model_version, model_name, probability, risk_level, status (VIGENTE/REEMPLAZADA), input_features, explanation, prediction_date, created_by |
 | `FollowUp` | student, user (responsable), created_by, academic_period, intervention_type, status (PENDIENTE/EN_SEGUIMIENTO/ATENDIDO/CERRADO), observation, follow_up_date |
 | `DataUpload` | uploaded_by, file, filename, checksum, records_found/valid/failed/processed, predictions_generated, errors (JSON), status, upload_date |
@@ -82,6 +86,26 @@ Paginación: `?page=&page_size=` (máx. 100).
 | GET/POST/PATCH | `/api/followups/` | Seguimiento (sin eliminación) | Todos (ámbito) |
 | GET | `/api/followups/responsibles/` | Posibles responsables | Todos |
 | GET | `/api/audit/` | Auditoría | Admin |
+| GET | `/api/training/overview/` | Estado de modelos, configuración, ejecución en curso | Admin |
+| POST | `/api/training/datasets/` | Validar dataset (multipart `file` o `{"source": "reference"}`) → 201 / 422 | Admin |
+| GET | `/api/training/datasets/{id}/` | Informe de validación | Admin |
+| GET/POST | `/api/training/runs/` | Historial (`status, algorithm, date_from, date_to`) / iniciar `{dataset, algorithms, selection_metric, confirm: true}` → 202, 409 si hay otra en curso, 503 si está desactivado | Admin |
+| GET | `/api/training/runs/{id}/` · `/api/training/runs/active/` | Estado real, etapas, versiones, comparaciones | Admin |
+| POST | `/api/training/runs/{id}/cancel/` | Cancelar (sólo PENDIENTE) | Admin |
+| POST | `/api/models/{id}/approve/` · `/reject/` | Revisión `{notes}`; aprobar exige criterios de aceptación | Admin |
+| POST | `/api/models/{id}/activate/` · `/rollback/` | Activación verificada / recuperación de una versión que estuvo activa | Admin |
+| GET | `/api/models/{id}/evaluation/` · `/api/models/activations/` | Evaluación y comparación / historial y candidatas a recuperar | Admin |
+| GET | `/api/notifications/` | Propias; filtros `is_read, type, category` | Autenticado |
+| GET | `/api/notifications/unread-count/` | Contador | Autenticado |
+| POST | `/api/notifications/{id}/read/` · `/api/notifications/read-all/` | Marcar leída(s) | Autenticado |
+| GET | `/api/reports/risk/` (+ `csv/`, `pdf/`) | Riesgo agregado: `period, program, semester, date_from, date_to` | Todos (ámbito) |
+| GET | `/api/reports/risk/students/csv/` | Listado individual seudonimizado | Admin |
+| GET | `/api/reports/models/` (+ `csv/`, `pdf/`) | Evaluación de modelos: `algorithm` | Todos |
+| GET | `/api/reports/activity/` (+ `csv/`, `pdf/`) | Actividad administrativa: `date_from, date_to` | Admin |
+
+Errores: 400 validación, 401 sin sesión, 403 permisos, 404 inexistente, 409 conflicto de estado (entrenamiento en
+curso, versión no aprobada, artefactos alterados…), 422 archivo rechazado, 503 función no disponible. Nunca se
+devuelven trazas internas.
 
 Ejemplo de respuesta de `POST /api/predictions/`:
 
@@ -119,3 +143,30 @@ Ejemplo de respuesta de `POST /api/predictions/`:
   conservan el nivel con que se generaron; ejecute un nuevo proceso de predicción para reclasificar.
 - **Datos reales**: dataset con las columnas de `MODEL_FEATURES` (sin derivadas) y `dropout` (0/1), anonimizado,
   fuera del repositorio (`data/private/`).
+
+## 6. Reentrenamiento, notificaciones y reportes (actualización)
+
+### Diagnóstico previo
+
+| | Hallazgo |
+|---|---|
+| Reutilizable | `sipd_ml.pipeline.run_training_pipeline` (partición, preprocesador, algoritmos, evaluación, guardado), `RiskPredictor`, `ModelVersion` + `sync_model_versions`, caché del predictor por versión activa, validadores de archivo de `uploads`, roles (`IsAdminRole`), ámbito por programa, `AuditLog`, componentes React (Card, DataTable, ConfirmationModal, Filter, StatusBadge, gráficos Recharts) |
+| Modificado | Pipeline: callback de etapas reales y opción de no publicar la copia raíz; persistencia: escritura atómica y SHA-256; `ModelVersion`: aprobación, evaluación, integridad; activación: verificación previa y registro; vistas de predicción/carga: notificaciones |
+| Nuevo | `ml/training_service.py`, `sipd_ml/dataset_validation.py`, `TrainingDataset`, `TrainingRun`, `ModelActivationLog`, apps `notifications` y `reports`, comando `process_training_runs`, páginas Reentrenamiento, Reportes y Notificaciones, campana |
+| Riesgos resueltos | Sin sistema de tareas (hilo + latido + restricción única); disco efímero en Vercel (desactivado y documentado); versiones a medio escribir (carpeta temporal + `os.replace`); artefactos manipulados o rutas fuera de `ML_MODELS_DIR` (SHA-256 y validación de ruta antes de cargar con joblib); activación con fallo (verificación antes de la transacción) |
+| Dependencias | `reportlab` (PDF con tablas, gráficos y numeración, sin dependencias de sistema). Nada más: sin Celery, Redis ni WebSockets |
+
+### Flujo
+
+```
+Admin ─ CSV ─▶ POST /training/datasets/ ─▶ validate_training_dataset ─▶ TrainingDataset (VALIDO/RECHAZADO)
+      ─ confirmar ─▶ POST /training/runs/ ─▶ TrainingRun(PENDIENTE, in_progress=True) ─▶ hilo / worker
+                         execute_run: VALIDANDO → PREPARANDO → ENTRENANDO → EVALUANDO → REGISTRANDO
+                         run_training_pipeline(publish_default=False) → carpetas <algoritmo>_<versión>/
+                         ModelVersion(PENDIENTE, checksums, acceptance) → COMPLETADO + notificaciones
+      ─ aprobar ─▶ evaluate_acceptance → APROBADO
+      ─ activar ─▶ verify_artifacts (ruta, SHA-256, carga, predicción de prueba) → transacción → caché limpia
+```
+
+Las predicciones toman siempre la versión activa de la BD (`ml.services.get_predictor`): la siguiente predicción tras
+una activación carga la versión nueva y las que ya estaban en curso terminan con la anterior.

@@ -77,3 +77,36 @@ export const userService = {
   deactivate: (id) => data(apiClient.delete(`/users/${id}/`)),
   activate: (id) => data(apiClient.post(`/users/${id}/activate/`)),
 };
+
+export const trainingService = {
+  overview: () => data(apiClient.get("/training/overview/")),
+  validateDataset: (file) => {
+    const form = new FormData();
+    form.append("file", file);
+    return data(apiClient.post("/training/datasets/", form, { headers: { "Content-Type": "multipart/form-data" } }));
+  },
+  useReferenceDataset: () => data(apiClient.post("/training/datasets/", { source: "reference" })),
+  start: (payload) => data(apiClient.post("/training/runs/", { ...payload, confirm: true })),
+  runs: (params) => data(apiClient.get("/training/runs/", { params: cleanParams(params) })),
+  run: (id) => data(apiClient.get(`/training/runs/${id}/`)),
+  activeRun: () => data(apiClient.get("/training/runs/active/")),
+  cancel: (id) => data(apiClient.post(`/training/runs/${id}/cancel/`)),
+  approve: (id, notes) => data(apiClient.post(`/models/${id}/approve/`, { notes })),
+  reject: (id, notes) => data(apiClient.post(`/models/${id}/reject/`, { notes })),
+  activate: (id) => data(apiClient.post(`/models/${id}/activate/`)),
+  rollback: (id) => data(apiClient.post(`/models/${id}/rollback/`)),
+  activations: () => data(apiClient.get("/models/activations/")),
+};
+
+export const notificationService = {
+  list: (params) => data(apiClient.get("/notifications/", { params: cleanParams(params) })),
+  unreadCount: () => data(apiClient.get("/notifications/unread-count/")),
+  markRead: (id) => data(apiClient.post(`/notifications/${id}/read/`)),
+  markAllRead: () => data(apiClient.post("/notifications/read-all/")),
+};
+
+/** kind: risk | models | activity. Las descargas devuelven la respuesta completa (blob + cabeceras). */
+export const reportService = {
+  get: (kind, params) => data(apiClient.get(`/reports/${kind}/`, { params: cleanParams(params) })),
+  download: (path, params) => apiClient.get(`/reports/${path}/`, { params: cleanParams(params), responseType: "blob" }),
+};

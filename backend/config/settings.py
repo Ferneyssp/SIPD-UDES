@@ -56,6 +56,42 @@ if ON_VERCEL:
 # El paquete sipd_ml y los artefactos entrenados viven dentro de backend/.
 ML_MODELS_DIR = Path(env("ML_MODELS_DIR", BASE_DIR / "ml_models"))
 
+# --- Reentrenamiento desde la interfaz web ---------------------------------------
+# thread: hilo en segundo plano del propio proceso web (Docker/local).
+# worker: la API sólo encola; `python manage.py process_training_runs` ejecuta.
+# sync:   en la misma petición (sólo pruebas automatizadas).
+# disabled: valor por defecto en Vercel (disco efímero y tiempo máximo de función).
+ML_TRAINING_EXECUTOR = env("ML_TRAINING_EXECUTOR", "disabled" if ON_VERCEL else "thread").strip().lower()
+# Sin latido durante este tiempo, una ejecución se considera interrumpida (p. ej. reinicio del servidor).
+ML_TRAINING_STALE_MINUTES = int(env("ML_TRAINING_STALE_MINUTES", "10"))
+# Mínimos técnicos para poder hacer la partición estratificada 75/25 y calcular métricas.
+ML_TRAINING_MIN_ROWS = int(env("ML_TRAINING_MIN_ROWS", "100"))
+ML_TRAINING_MIN_CLASS_ROWS = int(env("ML_TRAINING_MIN_CLASS_ROWS", "10"))
+# Dataset de referencia (SINTÉTICO) ofrecido como fuente de datos si existe en el servidor.
+ML_REFERENCE_DATASET = Path(env("ML_REFERENCE_DATASET", PROJECT_ROOT / "data" / "sample" / "synthetic_training_dataset.csv"))
+
+
+def _optional_float(name: str):
+    value = env(name, "")
+    return float(value) if str(value).strip() else None
+
+
+# Criterios de aceptación opcionales (métricas sobre el conjunto de prueba). Vacíos = sin mínimo:
+# el proyecto no define umbrales de rendimiento aprobados; cada institución debe fijarlos.
+ML_ACCEPTANCE_MIN_METRICS = {
+    metric: value for metric, value in {
+        "f1": _optional_float("ML_ACCEPTANCE_MIN_F1"),
+        "recall": _optional_float("ML_ACCEPTANCE_MIN_RECALL"),
+        "precision": _optional_float("ML_ACCEPTANCE_MIN_PRECISION"),
+        "roc_auc": _optional_float("ML_ACCEPTANCE_MIN_ROC_AUC"),
+    }.items() if value is not None
+}
+
+# Nombre institucional usado en los reportes PDF.
+INSTITUTION_NAME = env("INSTITUTION_NAME", "Institución de Educación Superior")
+# Máximo de filas por exportación CSV (evita exportaciones sin límite).
+REPORT_EXPORT_MAX_ROWS = int(env("REPORT_EXPORT_MAX_ROWS", "50000"))
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -75,6 +111,8 @@ INSTALLED_APPS = [
     "followups",
     "uploads",
     "audit",
+    "notifications",
+    "reports",
 ]
 
 MIDDLEWARE = [

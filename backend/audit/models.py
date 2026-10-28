@@ -16,6 +16,14 @@ class AuditAction(models.TextChoices):
     STUDENT_CHANGED = "STUDENT_CHANGED", "Modificación de estudiante"
     FOLLOWUP_CREATED = "FOLLOWUP_CREATED", "Registro de seguimiento"
     FOLLOWUP_UPDATED = "FOLLOWUP_UPDATED", "Actualización de seguimiento"
+    TRAINING_DATASET = "TRAINING_DATASET", "Validación de dataset de entrenamiento"
+    TRAINING_STARTED = "TRAINING_STARTED", "Inicio de reentrenamiento"
+    TRAINING_FINISHED = "TRAINING_FINISHED", "Fin de reentrenamiento"
+    TRAINING_CANCELLED = "TRAINING_CANCELLED", "Cancelación de reentrenamiento"
+    MODEL_APPROVED = "MODEL_APPROVED", "Aprobación de modelo"
+    MODEL_REJECTED = "MODEL_REJECTED", "Rechazo de modelo"
+    MODEL_ROLLBACK = "MODEL_ROLLBACK", "Recuperación de versión de modelo"
+    REPORT_EXPORTED = "REPORT_EXPORTED", "Exportación de reporte"
 
 
 class AuditLog(models.Model):

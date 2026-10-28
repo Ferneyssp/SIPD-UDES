@@ -4,8 +4,9 @@
 #   Aplicación: http://localhost:5173   API: http://localhost:8000/api/
 #
 # No se usa un servicio de ML separado: la inferencia es liviana (modelo ya
-# entrenado cargado en memoria por el backend). El entrenamiento es un proceso
-# offline (ml/scripts/train.py) y no forma parte del ciclo de peticiones.
+# entrenado cargado en memoria por el backend). El reentrenamiento desde la web
+# se ejecuta en un hilo en segundo plano del backend (nunca dentro de la petición);
+# los modelos se guardan en el volumen ml_models para que sobrevivan a reinicios.
 
 services:
   postgres:
@@ -50,8 +51,15 @@ services:
       SECURE_COOKIES: "False"
       SEED_DEMO: ${SEED_DEMO:-true}
       DEMO_PASSWORD: ${DEMO_PASSWORD:-}
+      ML_TRAINING_EXECUTOR: ${ML_TRAINING_EXECUTOR:-thread}
+      ML_ACCEPTANCE_MIN_F1: ${ML_ACCEPTANCE_MIN_F1:-}
+      ML_ACCEPTANCE_MIN_RECALL: ${ML_ACCEPTANCE_MIN_RECALL:-}
+      INSTITUTION_NAME: ${INSTITUTION_NAME:-Institución de Educación Superior}
     volumes:
       - media_data:/app/media
+      # Versiones de modelos (incluidas las reentrenadas desde la web). En el primer arranque Docker copia
+      # en el volumen los modelos incluidos en la imagen.
+      - ml_models:/app/backend/ml_models
     ports:
       - "8000:8000"
 
@@ -71,3 +79,4 @@ services:
 volumes:
   postgres_data:
   media_data:
+  ml_models:
