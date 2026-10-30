@@ -54,6 +54,17 @@ def _version_fields(directory: Path, metadata: dict) -> dict:
     }
 
 
+def is_discarded_artifact(metadata: dict) -> bool:
+    """Artefactos de un reentrenamiento web completado cuya versión ya no está registrada: se rechazó (o se
+    descartó) y sólo quedan los archivos, p. ej. en el repositorio cuando se entrenó en GitHub Actions."""
+    from .models import RunStatus, TrainingRun
+
+    run_id = metadata.get("training_run_id")
+    if not run_id or ModelVersion.objects.filter(algorithm=metadata["algorithm"], version=str(metadata["version"])).exists():
+        return False
+    return TrainingRun.objects.filter(pk=run_id, status=RunStatus.COMPLETED).exists()
+
+
 def sync_model_versions() -> list[ModelVersion]:
     """Registra en BD las versiones encontradas en ML_MODELS_DIR (idempotente)."""
     from sipd_ml.persistence import list_model_dirs, load_metadata
@@ -66,6 +77,8 @@ def sync_model_versions() -> list[ModelVersion]:
     registered = []
     for directory in list_model_dirs(models_dir):
         metadata = load_metadata(directory)
+        if is_discarded_artifact(metadata):
+            continue
         version, created = ModelVersion.objects.update_or_create(
             algorithm=metadata["algorithm"],
             version=metadata["version"],

@@ -353,6 +353,46 @@ class TrainingApiTests(SipdAPITestCase):
         self.assertIn("interrumpió", run.error_message)
         self.assertEqual(ModelVersion.objects.get(active=True), self.original)
 
+    @override_settings(ML_TRAINING_EXECUTOR="github", GITHUB_TRAINING_REPOSITORY="org/repo",
+                       GITHUB_TRAINING_TOKEN="token-de-prueba")
+    def test_github_executor_dispatches_workflow(self):
+        with mock.patch("ml.training_service.urllib.request.urlopen") as urlopen:
+            run_id = self.start(self.upload_dataset().data["id"]).data["id"]
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.full_url, "https://api.github.com/repos/org/repo/actions/workflows/train-models.yml/dispatches")
+        self.assertEqual(request.get_header("Authorization"), "Bearer token-de-prueba")
+        run = TrainingRun.objects.get(pk=run_id)
+        self.assertEqual(run.status, RunStatus.PENDING)  # lo ejecuta el flujo, no la API
+        self.assertIn("GitHub Actions", run.stage_message)
+
+    @override_settings(ML_TRAINING_EXECUTOR="github")
+    def test_github_executor_without_token_explains_manual_run(self):
+        with mock.patch("ml.training_service.urllib.request.urlopen") as urlopen:
+            run_id = self.start(self.upload_dataset().data["id"]).data["id"]
+        urlopen.assert_not_called()
+        self.assertIn("pestaña Actions", TrainingRun.objects.get(pk=run_id).stage_message)
+
+    def test_rejected_artifacts_left_on_disk_are_not_resynced_and_get_pruned(self):
+        """Con GitHub Actions los artefactos viven en el repositorio: rechazar borra el registro y la carpeta
+        se elimina en la siguiente publicación (prune_model_dirs); mientras tanto no reaparece."""
+        from django.core.management import call_command
+
+        from ml.services import sync_model_versions
+
+        run_id = self.start(self.upload_dataset().data["id"]).data["id"]
+        new = ModelVersion.objects.get(training_run_id=run_id)
+        backup = Path(tempfile.mkdtemp(prefix="sipd-keep-"))
+        shutil.copytree(self.models_dir / new.artifact_dir, backup / new.artifact_dir)
+        self.admin_client.post(f"/api/models/{new.pk}/reject/")
+        shutil.copytree(backup / new.artifact_dir, self.models_dir / new.artifact_dir)  # como en el repositorio
+        shutil.rmtree(backup)
+        sync_model_versions()
+        self.assertFalse(ModelVersion.objects.filter(training_run_id=run_id).exists())
+        self.assertFalse(ModelVersion.objects.filter(version=new.version).exists())
+        call_command("prune_model_dirs", stdout=open(self.models_dir / "out.txt", "w"))
+        self.assertFalse((self.models_dir / new.artifact_dir).exists())
+        self.assertTrue(any(self.models_dir.glob(f"*_{self.original.version}")))  # lo aprobado se conserva
+
     def test_only_uploaded_csv_is_accepted_as_source(self):
         """El dataset de referencia ya no se ofrece: sólo se entrena con un CSV cargado."""
         response = self.admin_client.post("/api/training/datasets/", {"source": "reference"}, format="json")

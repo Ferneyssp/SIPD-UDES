@@ -4,8 +4,8 @@ Reentrenamiento desde la interfaz web, aprobación y activación de versiones.
 - El entrenamiento usa el MISMO procedimiento que ml/scripts/train.py
   (sipd_ml.pipeline.run_training_pipeline): misma partición, preprocesador,
   algoritmos, métricas y umbral de evaluación.
-- Se ejecuta fuera de la petición HTTP (hilo en segundo plano o proceso
-  `process_training_runs`, según ML_TRAINING_EXECUTOR).
+- Se ejecuta fuera de la petición HTTP (hilo en segundo plano, proceso
+  `process_training_runs` o GitHub Actions, según ML_TRAINING_EXECUTOR).
 - Las versiones nuevas se escriben en carpetas propias (nunca se sobrescribe
   una existente) y quedan PENDIENTES de aprobación: no reemplazan al modelo activo.
 - Activar = verificar integridad + cargar y probar el modelo + cambiar la
@@ -14,8 +14,11 @@ Reentrenamiento desde la interfaz web, aprobación y activación de versiones.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import threading
+import urllib.error
+import urllib.request
 from datetime import timedelta
 from pathlib import Path
 
@@ -64,7 +67,7 @@ def executor_mode() -> str:
 
 
 def training_enabled() -> bool:
-    return executor_mode() in {"thread", "worker", "sync"}
+    return executor_mode() in {"thread", "worker", "sync", "github"}
 
 
 def training_config() -> dict:
@@ -80,7 +83,7 @@ def training_config() -> dict:
         "disabled_reason": None if training_enabled() else (
             "El reentrenamiento desde la web está desactivado en este despliegue (ML_TRAINING_EXECUTOR="
             f"{executor_mode()}). En Vercel el disco es efímero y las funciones tienen tiempo máximo: entrene con "
-            "ml/scripts/train.py y publique los modelos."
+            "GitHub Actions (ML_TRAINING_EXECUTOR=github, ver README) o con ml/scripts/train.py y publique los modelos."
         ),
         "algorithms": [{"value": a, "label": ALGORITHM_DISPLAY_NAMES.get(a, a)} for a in available_algorithms()],
         "selection_metrics": list(SELECTION_METRICS),
@@ -247,7 +250,35 @@ def _dispatch(run_id: int) -> None:
     elif mode == "thread":
         transaction.on_commit(lambda: threading.Thread(target=_execute_in_thread, args=(run_id,), daemon=True,
                                                        name=f"sipd-training-{run_id}").start())
+    elif mode == "github":
+        transaction.on_commit(lambda: _dispatch_github(run_id))
     # worker: el comando process_training_runs toma las ejecuciones pendientes.
+
+
+GITHUB_MANUAL_HINT = ("Ejecute el flujo «Entrenar modelos» en la pestaña Actions del repositorio para procesarla.")
+
+
+def _dispatch_github(run_id: int) -> None:
+    """Lanza .github/workflows/train-models.yml. Si no se puede, la ejecución sigue en cola y se indica
+    cómo lanzarla a mano (el flujo procesa todas las pendientes)."""
+    repository, token = settings.GITHUB_TRAINING_REPOSITORY, settings.GITHUB_TRAINING_TOKEN
+    if repository and token:
+        url = (f"https://api.github.com/repos/{repository}/actions/workflows/"
+               f"{settings.GITHUB_TRAINING_WORKFLOW}/dispatches")
+        request = urllib.request.Request(
+            url, method="POST", data=json.dumps({"ref": settings.GITHUB_TRAINING_REF}).encode(),
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
+                     "X-GitHub-Api-Version": "2022-11-28"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=10):
+                message = "En cola: GitHub Actions está preparando el entrenamiento (tarda unos minutos en comenzar)."
+        except (urllib.error.URLError, OSError) as exc:
+            logger.error("No se pudo lanzar el flujo de GitHub Actions para el entrenamiento #%s: %s", run_id, exc)
+            message = "En cola: no se pudo lanzar GitHub Actions automáticamente. " + GITHUB_MANUAL_HINT
+    else:
+        message = "En cola. " + GITHUB_MANUAL_HINT
+    TrainingRun.objects.filter(pk=run_id, status=RunStatus.PENDING).update(stage_message=message[:255])
 
 
 def _execute_in_thread(run_id: int) -> None:
@@ -451,7 +482,9 @@ def verify_artifacts(version: ModelVersion):
     directory = artifact_path(version.artifact_dir)
     missing = [name for name in ARTIFACT_FILENAMES if not (directory / name).is_file()]
     if missing:
-        raise ModelNotAvailableError(f"Faltan artefactos de la versión: {', '.join(missing)}.")
+        hint = (" Si se entrenó en GitHub Actions, espere a que termine el despliegue que los publica."
+                if executor_mode() == "github" else "")
+        raise ModelNotAvailableError(f"Faltan artefactos de la versión: {', '.join(missing)}.{hint}")
     if not version.artifact_checksums:
         raise ModelNotAvailableError("La versión no tiene sumas de verificación registradas; sincronice los modelos.")
     if artifact_checksums(directory) != version.artifact_checksums:

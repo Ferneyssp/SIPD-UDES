@@ -60,10 +60,18 @@ ML_MODELS_DIR = Path(env("ML_MODELS_DIR", BASE_DIR / "ml_models"))
 # thread: hilo en segundo plano del propio proceso web (Docker/local).
 # worker: la API sólo encola; `python manage.py process_training_runs` ejecuta.
 # sync:   en la misma petición (sólo pruebas automatizadas).
+# github: la API encola y lanza el flujo .github/workflows/train-models.yml, que entrena en GitHub Actions,
+#         registra las versiones en esta misma BD y publica los artefactos con un commit (Vercel redespliega).
 # disabled: valor por defecto en Vercel (disco efímero y tiempo máximo de función).
 ML_TRAINING_EXECUTOR = env("ML_TRAINING_EXECUTOR", "disabled" if ON_VERCEL else "thread").strip().lower()
 # Sin latido durante este tiempo, una ejecución se considera interrumpida (p. ej. reinicio del servidor).
-ML_TRAINING_STALE_MINUTES = int(env("ML_TRAINING_STALE_MINUTES", "10"))
+# Con GitHub Actions se espera más: el ejecutor tarda unos minutos en arrancar e instalar dependencias.
+ML_TRAINING_STALE_MINUTES = int(env("ML_TRAINING_STALE_MINUTES", "30" if ML_TRAINING_EXECUTOR == "github" else "10"))
+# Lanzamiento automático del flujo (executor github). Sin token, el flujo se ejecuta a mano desde GitHub.
+GITHUB_TRAINING_REPOSITORY = env("GITHUB_TRAINING_REPOSITORY", "")  # p. ej. "usuario/SIPD-UDES"
+GITHUB_TRAINING_TOKEN = env("GITHUB_TRAINING_TOKEN", "")  # token de grano fino con permiso "Actions: write"
+GITHUB_TRAINING_WORKFLOW = env("GITHUB_TRAINING_WORKFLOW", "train-models.yml")
+GITHUB_TRAINING_REF = env("GITHUB_TRAINING_REF", "main")
 # Mínimos técnicos para poder hacer la partición estratificada 75/25 y calcular métricas.
 ML_TRAINING_MIN_ROWS = int(env("ML_TRAINING_MIN_ROWS", "100"))
 ML_TRAINING_MIN_CLASS_ROWS = int(env("ML_TRAINING_MIN_CLASS_ROWS", "10"))
@@ -98,7 +106,10 @@ EMAIL_BACKEND = env("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBacken
                     else "django.core.mail.backends.console.EmailBackend")
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", f"SIPD <{EMAIL_HOST_USER}>" if EMAIL_HOST_USER else "SIPD <no-reply@localhost>")
 # Dirección pública del frontend: se usa en el enlace del correo de recuperación.
-FRONTEND_URL = env("FRONTEND_URL", "http://localhost:5173")
+# En Vercel, sin FRONTEND_URL, se usa el dominio de producción del proyecto (el frontend se sirve ahí mismo).
+_VERCEL_PRODUCTION_HOST = env("VERCEL_PROJECT_PRODUCTION_URL") if ON_VERCEL else None
+FRONTEND_URL = env("FRONTEND_URL", f"https://{_VERCEL_PRODUCTION_HOST}" if _VERCEL_PRODUCTION_HOST
+                   else "http://localhost:5173").rstrip("/")
 # Vigencia del enlace de recuperación (segundos).
 PASSWORD_RESET_TIMEOUT = int(env("PASSWORD_RESET_TIMEOUT", "1800"))
 

@@ -44,6 +44,11 @@ def reset_link(user) -> str:
     return f"{settings.FRONTEND_URL.rstrip('/')}/restablecer-contrasena/{uid}/{token}"
 
 
+def email_configured() -> bool:
+    """En Vercel el respaldo de consola dejaría el enlace en los logs: ahí se exige SMTP real."""
+    return not (settings.ON_VERCEL and settings.EMAIL_BACKEND.endswith("console.EmailBackend"))
+
+
 def send_reset_email(user) -> None:
     link = reset_link(user)
     minutes = settings.PASSWORD_RESET_TIMEOUT // 60
@@ -86,7 +91,10 @@ class PasswordResetRequestView(APIView):
             return Response({"detail": "Ingrese su correo institucional.", "errors": {"email": "Correo inválido."}},
                             status=status.HTTP_400_BAD_REQUEST)
         user = User.objects.filter(email__iexact=email, is_active=True).first()
-        if user is not None:
+        if user is not None and not email_configured():
+            logger.error("Correo no configurado en Vercel (faltan EMAIL_HOST_USER y EMAIL_HOST_PASSWORD): "
+                         "no se envió el enlace de recuperación al usuario %s", user.pk)
+        elif user is not None:
             try:
                 send_reset_email(user)
             except Exception:  # noqa: BLE001 - el error no se revela al cliente (respuesta siempre igual)

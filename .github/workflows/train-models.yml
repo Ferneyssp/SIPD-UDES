@@ -1,0 +1,71 @@
+# Entrenador del SIPD en GitHub Actions (gratuito).
+#
+# 1. En la web (Reentrenamiento) el administrador valida el dataset e inicia el entrenamiento: la ejecución
+#    queda "en cola" en la base de datos (ML_TRAINING_EXECUTOR=github) y el backend lanza este flujo.
+# 2. Este flujo lee de la base de datos (secreto DATABASE_URL) las ejecuciones pendientes y entrena con el
+#    mismo procedimiento del sistema. Las versiones quedan registradas como "pendientes de aprobación".
+# 3. Publica SÓLO los artefactos de los modelos (backend/ml_models/) con un commit; Vercel redespliega y
+#    el administrador aprueba o rechaza en la web. Los datos de estudiantes nunca se escriben en el repositorio.
+#
+# Secretos del repositorio (Settings → Secrets and variables → Actions):
+#   DATABASE_URL  cadena de conexión directa (no "pooler") de la base de datos de producción (Neon).
+name: Entrenar modelos
+
+on:
+  workflow_dispatch: {}
+
+concurrency:
+  group: train-models
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DEBUG: "False"
+      ML_TRAINING_EXECUTOR: worker
+      TZ: America/Bogota
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12" # misma versión que el backend en Vercel
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Instalar dependencias
+        run: pip install -r backend/requirements.txt
+
+      - name: Verificar configuración
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Falta el secreto DATABASE_URL (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+
+      - name: Entrenar las ejecuciones pendientes
+        working-directory: backend
+        run: |
+          # Clave efímera: este proceso no firma nada que se conserve.
+          export SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(50))')"
+          python manage.py process_training_runs --once
+          python manage.py prune_model_dirs
+
+      - name: Publicar los artefactos
+        run: |
+          git add -A backend/ml_models
+          if git diff --cached --quiet; then
+            echo "No hay modelos nuevos que publicar."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Modelos entrenados en GitHub Actions (run ${{ github.run_id }})"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

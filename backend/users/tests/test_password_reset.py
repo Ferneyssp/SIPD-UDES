@@ -85,3 +85,11 @@ class PasswordResetTests(SipdAPITestCase):
         codes = [self.request_reset("nadie@test.local").status_code for _ in range(6)]
         self.assertEqual(codes[:5], [200] * 5)
         self.assertEqual(codes[5], 429)
+
+    def test_vercel_without_smtp_does_not_leak_link_to_logs(self):
+        with self.settings(ON_VERCEL=True, EMAIL_BACKEND="django.core.mail.backends.console.EmailBackend"), \
+                self.assertLogs("users.password_reset", level="ERROR") as logs:
+            response = self.request_reset("sis@test.local")
+        self.assertEqual(response.status_code, 200)  # misma respuesta genérica
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertIn("Correo no configurado", logs.output[0])

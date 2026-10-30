@@ -46,6 +46,7 @@ Ver [§21](#21-referencia-civitas-learning-y-cambios-de-la-versión) para la rel
 20. [Reportes y exportación](#20-reportes-y-exportación)
 21. [Referencia Civitas Learning y cambios de la versión](#21-referencia-civitas-learning-y-cambios-de-la-versión)
 22. [Recuperación de contraseña por correo (Gmail)](#22-recuperación-de-contraseña-por-correo-gmail)
+23. [Entrenador en GitHub Actions](#23-entrenador-en-github-actions)
 
 ---
 
@@ -109,7 +110,7 @@ python -c "import secrets; print(secrets.token_urlsafe(50))"   # genera SECRET_K
 | `GPA_MIN`, `GPA_MAX` | Escala de promedio institucional (0–5) |
 | `UPLOAD_MAX_BYTES`, `UPLOAD_MAX_ROWS` | Límites de carga CSV |
 | `ML_MODELS_DIR` | Carpeta de modelos (por defecto `backend/ml_models`) |
-| `ML_TRAINING_EXECUTOR` | Reentrenamiento web: `thread` (defecto), `worker` o `disabled` (defecto en Vercel). Ver [§18](#18-reentrenamiento-desde-la-web) |
+| `ML_TRAINING_EXECUTOR` | Reentrenamiento web: `thread` (defecto), `worker`, `github` (GitHub Actions, [§23](#23-entrenador-en-github-actions)) o `disabled` (defecto en Vercel). Ver [§18](#18-reentrenamiento-desde-la-web) |
 | `ML_TRAINING_STALE_MINUTES` | Minutos sin latido para dar por interrumpida una ejecución (10) |
 | `ML_TRAINING_MIN_ROWS`, `ML_TRAINING_MIN_CLASS_ROWS` | Mínimos técnicos del dataset de entrenamiento (100 / 10 por clase) |
 | `ML_ACCEPTANCE_MIN_F1`, `_RECALL`, `_PRECISION`, `_ROC_AUC` | Mínimos **opcionales** de aceptación (vacíos = sin mínimo) |
@@ -172,6 +173,7 @@ Comandos útiles:
 | `python manage.py run_predictions --period 2026-2` | Genera predicciones de un periodo |
 | `python manage.py seed_demo` | Carga datos sintéticos de demostración |
 | `python manage.py process_training_runs` | Ejecuta reentrenamientos pendientes (sólo con `ML_TRAINING_EXECUTOR=worker`; `--once` para una pasada) |
+| `python manage.py prune_model_dirs` | Borra de `ML_MODELS_DIR` las carpetas de versiones rechazadas (`--dry-run` para sólo listarlas) |
 
 ## 8. Ejecución del frontend
 
@@ -444,10 +446,16 @@ DATABASE_URL="<url de Neon>" SECRET_KEY=x python manage.py createsuperuser
 
 - La carga de CSV admite hasta **4 MB** (límite de Vercel de 4,5 MB por petición). El archivo se guarda en la
   base de datos, no en disco (el disco de las funciones es temporal).
-- El **reentrenamiento desde la web está desactivado** en Vercel (`ML_TRAINING_EXECUTOR=disabled` por defecto): el
-  disco de las funciones es efímero (las versiones nuevas se perderían) y cada función tiene un tiempo máximo. La
-  pantalla lo indica. Entrene en local (desde la web local o con `python ml/scripts/train.py`), haga commit de
-  `backend/ml_models/` y push. Reportes y notificaciones sí funcionan en Vercel.
+- El **reentrenamiento no se ejecuta dentro de Vercel**: el disco de las funciones es efímero (las versiones nuevas
+  se perderían) y cada función tiene un tiempo máximo. Por defecto está desactivado (`ML_TRAINING_EXECUTOR=disabled`);
+  con `ML_TRAINING_EXECUTOR=github` se entrena en GitHub Actions y se publica con un commit
+  ([§23](#23-entrenador-en-github-actions)). Reportes y notificaciones sí funcionan en Vercel.
+- **El archivo `backend/.env` no se despliega** (está en `.gitignore` y `.vercelignore`) y **la base de datos de Vercel
+  es otra** (Neon), no la local. Las contraseñas o correos cambiados en local no llegan a producción: cámbielos en la
+  aplicación desplegada (Perfil, Usuarios o *¿Olvidó su contraseña?*). Las variables (`EMAIL_HOST_USER`,
+  `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL`, etc.) se definen en *Vercel → Settings → Environment Variables* y
+  sólo se aplican **después de un nuevo despliegue**. Sin `EMAIL_HOST_USER` en Vercel no se envía el correo de
+  recuperación (queda un error en los logs); `FRONTEND_URL` toma por defecto el dominio de producción del proyecto.
 - Los modelos se cargan con la versión fijada de scikit-learn (1.9.0, la usada al entrenar). Si reentrena con
   otra versión, actualice `backend/requirements.txt`.
 - Supuesto no verificado en Vercel: la detección automática del preset `django` (lee `manage.py` y
@@ -500,6 +508,7 @@ activo el modelo anterior. Las predicciones en curso usan el modelo que ya tení
 |---|---|---|
 | `thread` (defecto) | Local y Docker: hilo del proceso web | Si el proceso se reinicia durante el entrenamiento, la ejecución se marca *Fallida* al dejar de recibir latidos (`ML_TRAINING_STALE_MINUTES`) y se puede relanzar; no se activa nada |
 | `worker` | La API sólo encola; `python manage.py process_training_runs` ejecuta | Requiere mantener ese proceso con el mismo `ML_MODELS_DIR` y la misma BD |
+| `github` | Vercel: la API encola y lanza el flujo de GitHub Actions, que entrena y publica los artefactos con un commit ([§23](#23-entrenador-en-github-actions)) | Tarda unos minutos más (arranque del ejecutor y redespliegue); la aprobación se habilita cuando termina el despliegue |
 | `disabled` | Defecto en Vercel | No se puede reentrenar desde la web |
 
 No se agregaron Celery ni Redis: el entrenamiento es esporádico, de un único administrador y dura segundos o
@@ -597,3 +606,39 @@ contraseña de aplicación deja de servir y hay que generar otra.
 
 **Identidad visual.** El escudo de la Universidad de Santander (`frontend/public/escudo-udes.png`) aparece en el
 menú, el inicio de sesión, el ícono de la pestaña y el correo de recuperación.
+
+## 23. Entrenador en GitHub Actions
+
+Vercel no puede entrenar (disco efímero y tiempo máximo por función), así que el entrenamiento corre gratis en
+GitHub Actions con el flujo [`.github/workflows/train-models.yml`](.github/workflows/train-models.yml):
+
+1. En **Reentrenamiento** el administrador valida el CSV e inicia el entrenamiento. El dataset y la ejecución quedan
+   en la base de datos (Neon) y el backend lanza el flujo.
+2. El flujo instala las mismas dependencias que el backend (Python 3.12, scikit-learn 1.9.0), ejecuta
+   `process_training_runs --once` contra la base de datos de producción y registra las versiones como
+   **pendientes de aprobación**. La pantalla muestra el avance real (validación, entrenamiento, evaluación).
+3. Publica sólo los artefactos (`backend/ml_models/`) con un commit de `github-actions[bot]`; Vercel redespliega
+   (2-3 minutos) y entonces el administrador puede **aprobar** o **rechazar**. Hasta que termina el despliegue, la
+   aprobación avisa que faltan los artefactos.
+4. Al rechazar, la versión se borra de la base de datos y no vuelve a registrarse; la siguiente ejecución del flujo
+   elimina su carpeta del repositorio (`prune_model_dirs`). Sólo se conservan los modelos aprobados.
+
+Los datos de estudiantes se leen en memoria desde la base de datos; **nunca se escriben en el repositorio** (en
+`backend/ml_models/` sólo hay `model.joblib`, `preprocessor.joblib` y `metadata.json` con métricas).
+
+**Configuración (una sola vez)**
+
+| Dónde | Variable / secreto | Valor |
+|---|---|---|
+| GitHub → *Settings → Secrets and variables → Actions* | `DATABASE_URL` (secreto) | Cadena **directa** de Neon (la de `DATABASE_URL_UNPOOLED` en Vercel) |
+| GitHub → *Settings → Actions → General* | *Workflow permissions* | *Read and write permissions* (el flujo hace commit de los modelos) |
+| Vercel → *Environment Variables* | `ML_TRAINING_EXECUTOR` | `github` |
+| Vercel | `GITHUB_TRAINING_REPOSITORY` | `usuario/repositorio`, p. ej. `Ferneyssp/SIPD-UDES` |
+| Vercel | `GITHUB_TRAINING_TOKEN` (opcional) | Token *fine-grained* sólo de este repositorio con permiso **Actions: Read and write** |
+| Vercel | `GITHUB_TRAINING_WORKFLOW`, `GITHUB_TRAINING_REF` | Opcionales: `train-models.yml` y `main` por defecto |
+
+Sin `GITHUB_TRAINING_TOKEN` el entrenamiento queda en cola y la pantalla indica ejecutarlo a mano: *GitHub →
+Actions → Entrenar modelos → Run workflow* (procesa todas las ejecuciones pendientes). Si nadie lo lanza en
+`ML_TRAINING_STALE_MINUTES` (30 min con `github`), la ejecución se marca fallida sin tocar el modelo activo.
+Después de cambiar variables en Vercel, haga *Redeploy*. En repositorios privados, GitHub Actions incluye
+2.000 minutos gratis al mes; un entrenamiento de los tres algoritmos tarda del orden de 3-5 minutos.
