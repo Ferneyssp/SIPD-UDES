@@ -1,3 +1,5 @@
+import { Info } from "lucide-react";
+import { useState } from "react";
 import { riskInfo } from "../utils/risk";
 
 /**
@@ -33,5 +35,40 @@ export function RiskBar({ probability, level, compact = false }) {
         <span className={`risk-bar-fill ${info.className}-bg`} style={{ width: `${percentage}%` }} />
       </span>
     </div>
+  );
+}
+
+/**
+ * Cambio del riesgo estimado frente a la predicción del periodo anterior, en puntos porcentuales.
+ * Se muestra con símbolo y texto, no sólo con color.
+ */
+export function RiskChange({ points }) {
+  if (points === null || points === undefined) return <span className="text-muted">Sin predicción anterior</span>;
+  const text = `${Math.abs(points).toFixed(1).replace(".", ",")} pts`;
+  if (points > 0) return <span className="risk-change up" title="Aumentó frente al periodo anterior">▲ +{text}</span>;
+  if (points < 0) return <span className="risk-change down" title="Disminuyó frente al periodo anterior">▼ −{text}</span>;
+  return <span className="risk-change same">= {text}</span>;
+}
+
+/** Icono ℹ que muestra los rangos vigentes de cada nivel (leídos del backend). */
+export function RiskRangesInfo({ levels }) {
+  const [open, setOpen] = useState(false);
+  if (!levels?.length) return null;
+  const pct = (value) => `${Math.round(value * 100)} %`;
+  return (
+    <span className="ranges-info">
+      <button type="button" className="icon-button ranges-button" aria-expanded={open} aria-label="Ver rangos de los niveles de riesgo"
+        onClick={() => setOpen((value) => !value)}>
+        <Info size={15} aria-hidden="true" />
+      </button>
+      {open && (
+        <span className="ranges-popover" role="note">
+          {[...levels].reverse().map((level) => (
+            <span key={level.code}><strong>{level.label}:</strong> {pct(level.min)} – {level.code === "ALTO" ? "100 %" : `< ${pct(level.max)}`}</span>
+          ))}
+          <small>Umbrales definidos por la institución. Son estimaciones del modelo.</small>
+        </span>
+      )}
+    </span>
   );
 }

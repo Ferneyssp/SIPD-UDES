@@ -6,7 +6,7 @@ import App from "../App";
 import { NAVIGATION, canAccessItem } from "../config/navigation";
 import { AuthProvider } from "../context/AuthContext";
 import { ConfigProvider } from "../context/ConfigContext";
-import { ADMIN, CONFIG, PERIODS, PROFESSOR, PROGRAMS, loginAs } from "./helpers";
+import { ADMIN, CONFIG, PERIODS, COORDINATOR, PROGRAMS, loginAs } from "./helpers";
 
 vi.mock("../services/api", () => ({
   cleanParams: (p) => p,
@@ -92,15 +92,15 @@ beforeEach(() => {
 
 describe("Navegación de los nuevos módulos", () => {
   it("Reentrenamiento sólo es visible para el administrador; Reportes y Notificaciones para todos", () => {
-    const forProfessor = NAVIGATION.filter((i) => canAccessItem(i, PROFESSOR)).map((i) => i.label);
+    const forCoordinator = NAVIGATION.filter((i) => canAccessItem(i, COORDINATOR)).map((i) => i.label);
     const forAdmin = NAVIGATION.filter((i) => canAccessItem(i, ADMIN)).map((i) => i.label);
     expect(forAdmin).toEqual(expect.arrayContaining(["Reentrenamiento", "Reportes", "Notificaciones"]));
-    expect(forProfessor).toEqual(expect.arrayContaining(["Reportes", "Notificaciones"]));
-    expect(forProfessor).not.toContain("Reentrenamiento");
+    expect(forCoordinator).toEqual(expect.arrayContaining(["Reportes", "Notificaciones"]));
+    expect(forCoordinator).not.toContain("Reentrenamiento");
   });
 
-  it("un profesor que entra directamente a /reentrenamiento ve el aviso de permisos", async () => {
-    loginAs(PROFESSOR);
+  it("un coordinador que entra directamente a /reentrenamiento ve el aviso de permisos", async () => {
+    loginAs(COORDINATOR);
     renderApp("/reentrenamiento");
     expect(await screen.findByText(/no tiene permisos/i)).toBeInTheDocument();
     expect(api.trainingService.overview).not.toHaveBeenCalled();
@@ -115,7 +115,7 @@ describe("Campana de notificaciones", () => {
         created_at: "2026-10-28T10:00:00Z", link: "/reentrenamiento?run=9" }],
     });
     api.notificationService.markAllRead.mockResolvedValue({ updated: 3, unread: 0 });
-    loginAs(PROFESSOR);
+    loginAs(COORDINATOR);
     renderApp("/notificaciones-inexistente");
     const bell = await screen.findByRole("button", { name: "Notificaciones: 3 sin leer" });
     await userEvent.click(bell);
@@ -231,8 +231,8 @@ describe("Reportes", () => {
     expect(await screen.findByText(/El reporte no contiene datos/)).toBeInTheDocument();
   });
 
-  it("el profesor no ve el reporte de actividad ni el CSV individual", async () => {
-    loginAs(PROFESSOR);
+  it("el coordinador no ve el reporte de actividad ni el CSV individual", async () => {
+    loginAs(COORDINATOR);
     renderApp("/reportes");
     await screen.findByText("Estudiantes analizados");
     expect(screen.queryByRole("tab", { name: "Actividad administrativa" })).not.toBeInTheDocument();
@@ -246,5 +246,50 @@ describe("Reportes", () => {
     await screen.findByText("Estudiantes analizados");
     await userEvent.click(screen.getByRole("button", { name: /generar pdf/i }));
     expect(await screen.findByText("Sin permiso.")).toBeInTheDocument();
+  });
+});
+
+describe("Reentrenamiento: diseño simplificado", () => {
+  it("muestra el nuevo entrenamiento al inicio, sin dataset de referencia ni selector de métrica", async () => {
+    api.trainingService.validateDataset.mockResolvedValue(VALID_DATASET);
+    loginAs(ADMIN);
+    const { container } = renderApp("/reentrenamiento");
+    const newTraining = await screen.findByText("Nuevo reentrenamiento");
+    const status = screen.getByText("Estado de los modelos");
+    expect(newTraining.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /dataset de referencia/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("Activaciones y recuperación de versiones")).not.toBeInTheDocument();
+    for (const header of ["F1 (mejor)", "Activación", "Error"]) expect(screen.queryByRole("columnheader", { name: header })).not.toBeInTheDocument();
+    fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [new File(["a"], "historico.csv")] } });
+    await userEvent.click(screen.getByRole("button", { name: /validar archivo/i }));
+    await screen.findByText("Dataset válido.");
+    expect(screen.queryByLabelText(/métrica para recomendar/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/sintétic/i)).not.toBeInTheDocument();
+  });
+
+  it("presenta cada modelo como flashcard con la comparación y el detalle al voltearla", async () => {
+    api.trainingService.run.mockResolvedValue(COMPLETED_RUN);
+    loginAs(ADMIN);
+    renderApp("/reentrenamiento?run=9");
+    const card = await screen.findByRole("article", { name: /Regresión Logística v20261028100000/ });
+    const front = within(card);
+    expect(front.queryByText(/recomendado/i)).not.toBeInTheDocument();
+    expect(front.getByText("0,650")).toBeInTheDocument(); // F1 nuevo
+    expect(front.getByText("0,720")).toBeInTheDocument(); // F1 del modelo activo
+    expect(front.getByText("-0,070")).toBeInTheDocument(); // diferencia
+    expect(front.getByText(/comparación orientativa/)).toBeInTheDocument();
+    await userEvent.click(front.getByRole("button", { name: /ver detalle/i }));
+    expect(card).toHaveClass("flipped");
+    expect(front.getByLabelText("Matriz de confusión del conjunto de prueba")).toBeInTheDocument();
+    expect(front.getByText(/datasets distintos/)).toBeInTheDocument();
+    await userEvent.click(front.getByRole("button", { name: /volver/i }));
+    expect(card).not.toHaveClass("flipped");
+  });
+
+  it("el reporte de actividad administrativa ya no existe", async () => {
+    loginAs(ADMIN);
+    renderApp("/reportes");
+    await screen.findByText("Estudiantes analizados");
+    expect(screen.queryByRole("tab", { name: /actividad/i })).not.toBeInTheDocument();
   });
 });

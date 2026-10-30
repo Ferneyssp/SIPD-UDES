@@ -1,11 +1,12 @@
 /**
- * Almacenamiento de tokens JWT.
- * - "Recordar sesión" => localStorage (persiste al cerrar el navegador).
- * - Sin recordar      => sessionStorage (se borra al cerrar la pestaña).
+ * Sesión en el navegador.
+ * - El refresh token NO se guarda aquí: viaja en una cookie HttpOnly que JavaScript no puede leer.
+ * - El access token (vida corta) vive sólo en memoria: se pierde al recargar y se renueva con la cookie.
+ * - Sólo el perfil (sin secretos) se guarda para restaurar la interfaz: localStorage con "Recordar
+ *   sesión" y sessionStorage sin él.
  */
-const ACCESS_KEY = "sipd.access";
-const REFRESH_KEY = "sipd.refresh";
 const USER_KEY = "sipd.user";
+let accessToken = null;
 
 function safeStorage(kind) {
   try {
@@ -17,30 +18,27 @@ function safeStorage(kind) {
 
 function activeStorage() {
   const local = safeStorage("local");
-  if (local?.getItem(REFRESH_KEY)) return local;
+  if (local?.getItem(USER_KEY)) return local;
   return safeStorage("session");
 }
 
 export const tokenStorage = {
-  save({ access, refresh, user }, remember) {
+  save({ access, user }, remember) {
     this.clear();
-    const storage = safeStorage(remember ? "local" : "session");
-    if (!storage) return;
-    storage.setItem(ACCESS_KEY, access);
-    storage.setItem(REFRESH_KEY, refresh);
-    if (user) storage.setItem(USER_KEY, JSON.stringify(user));
+    accessToken = access || null;
+    if (user) safeStorage(remember ? "local" : "session")?.setItem(USER_KEY, JSON.stringify(user));
   },
-  updateTokens({ access, refresh }) {
-    const storage = activeStorage();
-    if (!storage) return;
-    if (access) storage.setItem(ACCESS_KEY, access);
-    if (refresh) storage.setItem(REFRESH_KEY, refresh);
+  updateTokens({ access }) {
+    if (access) accessToken = access;
   },
   saveUser(user) {
     activeStorage()?.setItem(USER_KEY, JSON.stringify(user));
   },
-  getAccess: () => activeStorage()?.getItem(ACCESS_KEY) || null,
-  getRefresh: () => activeStorage()?.getItem(REFRESH_KEY) || null,
+  getAccess: () => accessToken,
+  /** Hay una sesión que puede restaurarse con la cookie (perfil guardado). */
+  hasSession() {
+    return Boolean(this.getUser());
+  },
   getUser() {
     try {
       const raw = activeStorage()?.getItem(USER_KEY);
@@ -50,10 +48,11 @@ export const tokenStorage = {
     }
   },
   clear() {
+    accessToken = null;
     for (const storage of [safeStorage("local"), safeStorage("session")]) {
-      storage?.removeItem(ACCESS_KEY);
-      storage?.removeItem(REFRESH_KEY);
       storage?.removeItem(USER_KEY);
+      storage?.removeItem("sipd.access"); // claves de versiones anteriores
+      storage?.removeItem("sipd.refresh");
     }
   },
 };

@@ -7,6 +7,8 @@ class AuditAction(models.TextChoices):
     LOGIN_FAILED = "LOGIN_FAILED", "Inicio de sesión fallido"
     LOGOUT = "LOGOUT", "Cierre de sesión"
     PASSWORD_CHANGED = "PASSWORD_CHANGED", "Cambio de contraseña"
+    PASSWORD_RESET_REQUESTED = "PASSWORD_RESET_REQ", "Solicitud de recuperación de contraseña"
+    PASSWORD_RESET = "PASSWORD_RESET", "Restablecimiento de contraseña"
     DATA_UPLOAD = "DATA_UPLOAD", "Carga de datos"
     PREDICTION_RUN = "PREDICTION_RUN", "Ejecución de predicciones"
     MODEL_ACTIVATED = "MODEL_ACTIVATED", "Activación de modelo"
@@ -24,6 +26,8 @@ class AuditAction(models.TextChoices):
     MODEL_REJECTED = "MODEL_REJECTED", "Rechazo de modelo"
     MODEL_ROLLBACK = "MODEL_ROLLBACK", "Recuperación de versión de modelo"
     REPORT_EXPORTED = "REPORT_EXPORTED", "Exportación de reporte"
+    STUDENT_VIEWED = "STUDENT_VIEWED", "Consulta de ficha de estudiante"
+    ALERT_UPDATED = "ALERT_UPDATED", "Gestión de alerta temprana"
 
 
 class AuditLog(models.Model):

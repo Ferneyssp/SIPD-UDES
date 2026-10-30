@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from academic.models import AcademicRecord, Program
+from academic.models import AcademicRecord
 from academic.serializers import AcademicRecordSerializer
 from config.risk import RiskLevel
 from followups.models import FollowUpStatus
@@ -20,6 +20,9 @@ class StudentListSerializer(serializers.ModelSerializer):
     current_prediction_id = serializers.IntegerField(read_only=True, allow_null=True)
     latest_followup_status = serializers.CharField(read_only=True, allow_null=True)
     latest_followup_status_display = serializers.SerializerMethodField()
+    previous_probability = serializers.FloatField(read_only=True, allow_null=True)
+    risk_change_points = serializers.SerializerMethodField()
+    open_alert_status = serializers.CharField(read_only=True, allow_null=True)
 
     class Meta:
         model = Student
@@ -27,8 +30,14 @@ class StudentListSerializer(serializers.ModelSerializer):
             "id", "anonymous_code", "program", "program_code", "semester", "academic_status", "is_active",
             "current_prediction_id", "current_probability", "current_risk_percentage", "current_risk_level",
             "current_risk_level_display", "current_prediction_date", "current_prediction_period",
-            "latest_followup_status", "latest_followup_status_display",
+            "latest_followup_status", "latest_followup_status_display", "previous_probability",
+            "risk_change_points", "open_alert_status",
         ]
+
+    def get_risk_change_points(self, obj):
+        """Diferencia en puntos porcentuales frente a la predicción del periodo anterior (None si no hay)."""
+        value = getattr(obj, "risk_change", None)
+        return None if value is None else round(value * 100, 1)
 
     def get_current_risk_percentage(self, obj):
         value = getattr(obj, "current_probability", None)
@@ -41,19 +50,6 @@ class StudentListSerializer(serializers.ModelSerializer):
     def get_latest_followup_status_display(self, obj):
         status = getattr(obj, "latest_followup_status", None)
         return FollowUpStatus(status).label if status else "Sin seguimiento"
-
-
-class StudentWriteSerializer(serializers.ModelSerializer):
-    program = serializers.SlugRelatedField(slug_field="code", queryset=Program.objects.filter(is_active=True))
-
-    class Meta:
-        model = Student
-        fields = ["id", "anonymous_code", "program", "semester", "academic_status", "is_active"]
-
-    def to_internal_value(self, data):
-        if isinstance(data, dict) and isinstance(data.get("anonymous_code"), str):
-            data = {**data, "anonymous_code": data["anonymous_code"].strip().upper()}
-        return super().to_internal_value(data)
 
 
 class StudentDetailSerializer(StudentListSerializer):

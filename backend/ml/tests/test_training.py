@@ -107,7 +107,7 @@ class TrainingApiTests(SipdAPITestCase):
     # ------------------------------------------------------------------ permisos
     def test_only_admin_can_use_training_endpoints(self):
         dataset = TrainingDataset.objects.create(filename="x.csv", content=b"", checksum="x", status="VALIDO")
-        for user in (self.coordinator, self.professor):
+        for user in (self.coordinator, self.coordinator_sis):
             client = self.client_for(user)
             self.assertEqual(client.get("/api/training/overview/").status_code, 403)
             self.assertEqual(client.get("/api/training/runs/").status_code, 403)
@@ -191,7 +191,7 @@ class TrainingApiTests(SipdAPITestCase):
         admin_types = set(Notification.objects.filter(recipient=self.admin).values_list("type", flat=True))
         self.assertTrue({NotificationType.TRAINING_STARTED, NotificationType.TRAINING_COMPLETED,
                          NotificationType.MODEL_EVALUATED} <= admin_types)
-        self.assertFalse(Notification.objects.filter(recipient__in=[self.coordinator, self.professor]).exists())
+        self.assertFalse(Notification.objects.filter(recipient__in=[self.coordinator, self.coordinator_sis]).exists())
 
         # Activar sin aprobar no está permitido.
         self.assertEqual(self.admin_client.post(f"/api/models/{new.pk}/activate/").status_code, 409)
@@ -229,14 +229,48 @@ class TrainingApiTests(SipdAPITestCase):
         # El mismo dataset no se reutiliza por accidente.
         self.assertEqual(self.start(dataset.data["id"]).status_code, 409)
 
-    def test_rejected_version_cannot_be_activated(self):
+    def test_rejected_version_is_deleted(self):
+        """Los modelos rechazados no se guardan: se eliminan su registro y sus artefactos."""
         run_id = self.start(self.upload_dataset().data["id"]).data["id"]
         new = TrainingRun.objects.get(pk=run_id).model_versions.get()
+        directory = self.models_dir / new.artifact_dir
+        self.assertTrue(directory.exists())
         with self.captureOnCommitCallbacks(execute=True):
-            self.assertEqual(self.admin_client.post(f"/api/models/{new.pk}/reject/").status_code, 200)
-        self.assertEqual(self.admin_client.post(f"/api/models/{new.pk}/activate/").status_code, 409)
+            response = self.admin_client.post(f"/api/models/{new.pk}/reject/")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["deleted"])
+        self.assertFalse(ModelVersion.objects.filter(pk=new.pk).exists())
+        self.assertFalse(directory.exists())
+        self.assertEqual(self.admin_client.post(f"/api/models/{new.pk}/activate/").status_code, 404)
         self.assertEqual(ModelVersion.objects.get(active=True), self.original)
         self.assertTrue(Notification.objects.filter(type=NotificationType.MODEL_REJECTED).exists())
+
+    def test_pending_versions_are_not_listed_until_approved(self):
+        run_id = self.start(self.upload_dataset().data["id"]).data["id"]
+        new = TrainingRun.objects.get(pk=run_id).model_versions.get()
+        listed = {m["id"] for m in self.admin_client.get("/api/models/").data}
+        self.assertNotIn(new.pk, listed)
+        self.assertNotIn(new.pk, {m["id"] for m in self.admin_client.get("/api/training/overview/").data["versions"]})
+        self.admin_client.post(f"/api/models/{new.pk}/approve/")
+        self.assertIn(new.pk, {m["id"] for m in self.admin_client.get("/api/models/").data})
+
+    def test_new_training_discards_undecided_versions(self):
+        first = TrainingRun.objects.get(pk=self.start(self.upload_dataset().data["id"]).data["id"]).model_versions.get()
+        approved = TrainingRun.objects.get(pk=self.start(self.upload_dataset().data["id"]).data["id"]).model_versions.get()
+        self.assertFalse(ModelVersion.objects.filter(pk=first.pk).exists())  # quedó sin decidir: se descartó
+        # Su carpeta se eliminó; si existe una con el mismo nombre es la de la nueva versión (misma marca de tiempo).
+        if (self.models_dir / first.artifact_dir).exists():
+            self.assertEqual(approved.artifact_dir, first.artifact_dir)
+        self.admin_client.post(f"/api/models/{approved.pk}/approve/")
+        self.start(self.upload_dataset().data["id"])
+        self.assertTrue(ModelVersion.objects.filter(pk=approved.pk).exists())  # las aprobadas nunca se borran
+        self.assertTrue(ModelVersion.objects.filter(pk=self.original.pk).exists())
+
+    def test_rejected_dataset_is_not_stored(self):
+        response = self.upload_dataset(b"program_code,gpa,dropout\nSIS,3.0,1\n")
+        self.assertEqual(response.status_code, 422)
+        self.assertIsNone(response.data["id"])
+        self.assertFalse(TrainingDataset.objects.exists())
 
     def test_rollback_only_to_previously_active_versions(self):
         run_id = self.start(self.upload_dataset().data["id"]).data["id"]
@@ -319,13 +353,17 @@ class TrainingApiTests(SipdAPITestCase):
         self.assertIn("interrumpió", run.error_message)
         self.assertEqual(ModelVersion.objects.get(active=True), self.original)
 
-    def test_reference_dataset_source(self):
-        with override_settings(ML_REFERENCE_DATASET=self.models_dir / "no-existe.csv"):
-            self.assertEqual(self.admin_client.post("/api/training/datasets/", {"source": "reference"}, format="json").status_code, 404)
-        reference = self.models_dir / "referencia.csv"
-        reference.write_bytes(training_csv())
-        with override_settings(ML_REFERENCE_DATASET=reference):
-            response = self.admin_client.post("/api/training/datasets/", {"source": "reference"}, format="json")
-        self.assertEqual(response.status_code, 201)
-        self.assertTrue(response.data["is_synthetic"])
-        self.assertEqual(response.data["source"], "REFERENCIA")
+    def test_only_uploaded_csv_is_accepted_as_source(self):
+        """El dataset de referencia ya no se ofrece: sólo se entrena con un CSV cargado."""
+        response = self.admin_client.post("/api/training/datasets/", {"source": "reference"}, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertNotIn("reference_available", self.admin_client.get("/api/training/overview/").data["config"]["dataset"])
+        self.assertFalse(TrainingDataset.objects.exists())
+
+    def test_selection_metric_defaults_to_f1(self):
+        dataset_id = self.upload_dataset().data["id"]
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.admin_client.post("/api/training/runs/", {"dataset": dataset_id, "algorithms": ["logistic_regression"],
+                                                                      "confirm": True}, format="json")
+        self.assertEqual(response.status_code, 202, response.data)
+        self.assertEqual(TrainingRun.objects.get(pk=response.data["id"]).selection_metric, "f1")

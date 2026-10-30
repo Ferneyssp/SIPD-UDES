@@ -46,7 +46,7 @@ class PredictionApiTests(SipdAPITestCase):
 
     def test_only_admin_runs_predictions(self):
         self.assertEqual(self.client_for(self.coordinator).post("/api/predictions/", {"student": "E001"}, format="json").status_code, 403)
-        self.assertEqual(self.client_for(self.professor).post("/api/predictions/run-batch/", {"academic_period": "2026-2"}, format="json").status_code, 403)
+        self.assertEqual(self.client_for(self.coordinator_sis).post("/api/predictions/run-batch/", {"academic_period": "2026-2"}, format="json").status_code, 403)
 
     def test_batch_and_filters(self):
         client = self.client_for(self.admin)
@@ -56,11 +56,11 @@ class PredictionApiTests(SipdAPITestCase):
         self.assertEqual(client.get("/api/predictions/?program=CIV").data["count"], 1)
         self.assertEqual(client.get("/api/predictions/?date_from=bad").status_code, 400)
 
-    def test_professor_sees_only_scope_predictions(self):
+    def test_scoped_coordinator_sees_only_scope_predictions(self):
         self.client_for(self.admin).post("/api/predictions/run-batch/", {"academic_period": "2026-2"}, format="json")
-        results = self.client_for(self.professor).get("/api/predictions/").data["results"]
+        results = self.client_for(self.coordinator_sis).get("/api/predictions/").data["results"]
         self.assertEqual({r["student_code"] for r in results}, {"E001"})
-        self.assertEqual(self.client_for(self.professor).get("/api/predictions/history/?student=E002").status_code, 403)
+        self.assertEqual(self.client_for(self.coordinator_sis).get("/api/predictions/history/?student=E002").status_code, 403)
 
     def test_summary_for_inicio(self):
         self.client_for(self.admin).post("/api/predictions/run-batch/", {"academic_period": "2026-2"}, format="json")
@@ -72,6 +72,29 @@ class PredictionApiTests(SipdAPITestCase):
         self.assertEqual(totals["predictions"], 2)
         self.assertTrue(data["model"]["available"])
 
+    def test_summary_risk_level_filters_cards_charts_and_table(self):
+        """El filtro "Nivel de riesgo" de Inicio aplica a tarjetas, gráficos y tabla; sin él ("Todos") se ve todo."""
+        client = self.client_for(self.admin)
+        client.post("/api/predictions/run-batch/", {"academic_period": "2026-2"}, format="json")
+        everything = client.get("/api/predictions/summary/").data
+        self.assertEqual(everything["totals"]["students"], 2)
+        self.assertEqual(everything["attention_total"], 2)
+        level = Prediction.objects.get(student=self.student_sis, status=PredictionStatus.CURRENT).risk_level
+        filtered = client.get(f"/api/predictions/summary/?risk_level={level}").data
+        same_level = Prediction.objects.filter(status=PredictionStatus.CURRENT, risk_level=level).count()
+        self.assertEqual(filtered["totals"]["students"], same_level)
+        self.assertEqual(filtered["totals"]["predictions"], same_level)
+        self.assertEqual(sum(row[level] for row in filtered["by_program"]), same_level)
+        self.assertTrue(all(sum(row[other] for row in filtered["by_program"]) == 0 for other in ("ALTO", "MEDIO", "BAJO") if other != level))
+        self.assertEqual(filtered["attention_total"], same_level)
+        self.assertEqual(client.get("/api/predictions/summary/?risk_level=XYZ").status_code, 400)
+
+    def test_summary_limit_is_validated(self):
+        """S8: un límite no numérico es un error de validación (400), no un error interno."""
+        client = self.client_for(self.admin)
+        self.assertEqual(client.get("/api/predictions/summary/?limit=abc").status_code, 400)
+        self.assertEqual(client.get("/api/predictions/summary/?limit=999").status_code, 200)
+
     def test_model_not_available_returns_503(self):
         ModelVersion.objects.all().delete()
         with override_settings(ML_MODELS_DIR=tempfile.mkdtemp()):
@@ -82,6 +105,6 @@ class PredictionApiTests(SipdAPITestCase):
         self.assertIn("modelo", response.data["detail"])
 
     def test_config_exposes_centralized_thresholds(self):
-        data = self.client_for(self.professor).get("/api/config/").data
+        data = self.client_for(self.coordinator_sis).get("/api/config/").data
         self.assertEqual(data["risk_thresholds"], {"low": 0.3, "medium": 0.6})
         self.assertEqual([level["code"] for level in data["risk_levels"]], ["BAJO", "MEDIO", "ALTO"])

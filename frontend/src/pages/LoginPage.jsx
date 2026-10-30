@@ -1,6 +1,6 @@
-import { Eye, EyeOff, GraduationCap, Lock, Mail } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { useState } from "react";
-import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import Alert from "../components/Alert";
 import Button from "../components/Button";
 import Input from "../components/Input";
@@ -21,6 +21,11 @@ export default function LoginPage() {
   if (isAuthenticated) return <Navigate to="/inicio" replace />;
 
   const expired = sessionExpired || searchParams.get("expired") === "1";
+  // Avisos de éxito que llegan desde otras pantallas (cambio o restablecimiento de contraseña).
+  const notice = {
+    "contrasena-actualizada": "Contraseña actualizada correctamente. Inicie sesión con su nueva contraseña.",
+    "contrasena-restablecida": "Su contraseña se restableció correctamente. Ya puede iniciar sesión.",
+  }[searchParams.get("aviso")];
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -47,15 +52,14 @@ export default function LoginPage() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-brand">
-          <span className="login-logo" aria-hidden="true">
-            <GraduationCap size={40} />
-          </span>
+          <img className="login-logo-img" src="/escudo-udes.png" alt="Escudo de la Universidad de Santander" />
           <h1 className="login-title">{APP_NAME}</h1>
           <p className="login-institution">{INSTITUTION_NAME}</p>
           <p className="login-description">{SYSTEM_DESCRIPTION}</p>
         </div>
 
-        {expired && !error && <Alert type="warning">Sesión expirada. Inicie sesión nuevamente.</Alert>}
+        {notice && !error && <Alert type="success">{notice}</Alert>}
+        {expired && !error && !notice && <Alert type="warning">Sesión expirada. Inicie sesión nuevamente.</Alert>}
         {error && <Alert type="error">{error}</Alert>}
 
         <form onSubmit={handleSubmit} className="login-form" noValidate>
@@ -94,6 +98,7 @@ export default function LoginPage() {
             <input type="checkbox" checked={form.remember} onChange={update("remember")} />
             <span>Recordar mi sesión en este equipo</span>
           </label>
+          <Link to="/recuperar-contrasena" className="forgot-link">¿Olvidó su contraseña?</Link>
         </form>
       </div>
     </div>

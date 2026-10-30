@@ -22,6 +22,9 @@ class NotificationType(models.TextChoices):
     UPLOAD_REJECTED = "UPLOAD_REJECTED", "Carga académica rechazada"
     # Predicciones
     PREDICTIONS_COMPLETED = "PREDICTIONS_COMPLETED", "Proceso de predicción finalizado"
+    # Alertas tempranas
+    ALERTS_CREATED = "ALERTS_CREATED", "Nuevas alertas tempranas"
+    ALERT_ASSIGNED = "ALERT_ASSIGNED", "Alerta asignada"
 
 
 CATEGORY_TYPES = {
@@ -32,8 +35,10 @@ CATEGORY_TYPES = {
               NotificationType.DATASET_FORMAT_ERRORS, NotificationType.DATASET_INSUFFICIENT,
               NotificationType.DATA_PREPARATION_ERROR, NotificationType.UPLOAD_REJECTED],
     "PREDICCIONES": [NotificationType.PREDICTIONS_COMPLETED],
+    "ALERTAS": [NotificationType.ALERTS_CREATED, NotificationType.ALERT_ASSIGNED],
 }
-CATEGORY_LABELS = {"MODELOS": "Administración de modelos", "DATOS": "Validación de datos", "PREDICCIONES": "Predicciones"}
+CATEGORY_LABELS = {"MODELOS": "Administración de modelos", "DATOS": "Validación de datos", "PREDICCIONES": "Predicciones",
+                   "ALERTAS": "Alertas tempranas"}
 
 
 class NotificationLevel(models.TextChoices):

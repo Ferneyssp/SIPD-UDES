@@ -60,9 +60,11 @@ class SipdAPITestCase(APITestCase):
         cls.previous_period = AcademicPeriod.objects.create(code="2026-1")
         cls.period = AcademicPeriod.objects.create(code="2026-2", is_current=True)
         cls.admin = User.objects.create_user("admin_t", "admin@test.local", PASSWORD, role=Role.ADMIN)
+        # Coordinador de ambos programas y coordinador sólo de Sistemas (ámbito restringido).
         cls.coordinator = User.objects.create_user("coord_t", "coord@test.local", PASSWORD, role=Role.COORDINATOR)
-        cls.professor = User.objects.create_user("prof_t", "prof@test.local", PASSWORD, role=Role.PROFESSOR)
-        cls.professor.programs.set([cls.sis])
+        cls.coordinator.programs.set([cls.sis, cls.civ])
+        cls.coordinator_sis = User.objects.create_user("coord_sis", "sis@test.local", PASSWORD, role=Role.COORDINATOR)
+        cls.coordinator_sis.programs.set([cls.sis])
         cls.student_sis = Student.objects.create(anonymous_code="E001", program=cls.sis, semester=5, current_period=cls.period)
         cls.student_civ = Student.objects.create(anonymous_code="E002", program=cls.civ, semester=3, current_period=cls.period)
         cls.record_sis = AcademicRecord.objects.create(

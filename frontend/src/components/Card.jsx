@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 /** Contenedor con título opcional y acciones a la derecha. */
 export default function Card({ title, subtitle, actions, children, className = "", padded = true, ...props }) {
   return (
@@ -16,10 +18,10 @@ export default function Card({ title, subtitle, actions, children, className = "
   );
 }
 
-/** Tarjeta de indicador (Inicio). tone: neutral | high | medium | low | info */
-export function StatCard({ label, value, detail, caption, icon: Icon, tone = "neutral" }) {
-  return (
-    <article className={`stat-card tone-${tone}`}>
+/** Tarjeta de indicador (Inicio). tone: neutral | high | medium | low | info. Con `to`, abre esa ruta (p. ej. el listado filtrado). */
+export function StatCard({ label, value, detail, caption, icon: Icon, tone = "neutral", to }) {
+  const content = (
+    <article className={`stat-card tone-${tone} ${to ? "is-link" : ""}`}>
       {Icon && (
         <span className="stat-icon" aria-hidden="true">
           <Icon size={24} />
@@ -35,4 +37,5 @@ export function StatCard({ label, value, detail, caption, icon: Icon, tone = "ne
       </div>
     </article>
   );
+  return to ? <Link to={to} className="stat-card-link" aria-label={`${label}: ${value}. Ver listado`}>{content}</Link> : content;
 }

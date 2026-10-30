@@ -64,7 +64,7 @@ export default function CargaDatosPage() {
       setReport(await uploadService.validate(file));
     } catch (err) {
       const data = err.response?.data;
-      if (err.response?.status === 422 && data?.id) setReport(data);
+      if (err.response?.status === 422 && data?.status) setReport(data);
       else setError(getErrorMessage(err, "No se pudo procesar el archivo."));
     } finally {
       setValidating(false);
@@ -101,6 +101,8 @@ export default function CargaDatosPage() {
   };
 
   const reset = () => {
+    // Una carga validada que no se confirma se descarta: sólo se conservan las procesadas.
+    if (report?.id && report.status === "VALIDADO" && !result) uploadService.discard(report.id).then(uploads.reload).catch(() => {});
     setFile(null);
     setReport(null);
     setResult(null);

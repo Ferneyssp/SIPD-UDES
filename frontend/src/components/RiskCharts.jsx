@@ -101,30 +101,3 @@ export function RiskTimelineChart({ points, thresholds }) {
     </ResponsiveContainer>
   );
 }
-
-/** Evolución institucional: % de estudiantes en riesgo alto por periodo. */
-export function InstitutionalTrendChart({ rows }) {
-  const data = rows.map((row) => ({
-    period: row.period,
-    ALTO: row.total ? +((100 * row.alto) / row.total).toFixed(1) : 0,
-    MEDIO: row.total ? +((100 * row.medio) / row.total).toFixed(1) : 0,
-    BAJO: row.total ? +((100 * row.bajo) / row.total).toFixed(1) : 0,
-    total: row.total,
-  }));
-  return (
-    <ResponsiveContainer width="100%" height={260}>
-      <BarChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: 0 }} barCategoryGap="30%">
-        <CartesianGrid vertical={false} stroke="#eef1f5" />
-        <XAxis dataKey="period" tick={AXIS} axisLine={false} tickLine={false} />
-        <YAxis unit="%" domain={[0, 100]} tick={AXIS} axisLine={false} tickLine={false} width={48} />
-        <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: "#f3f6f9" }}
-          formatter={(value, name) => [`${value} %`, `Riesgo ${RISK_LEVELS[name]?.label}`]} />
-        <Legend formatter={(value) => RISK_LEVELS[value]?.label || value} iconType="square" wrapperStyle={{ fontSize: 13 }} />
-        {[...RISK_ORDER].reverse().map((code, index) => (
-          <Bar isAnimationActive={false} key={code} dataKey={code} stackId="t" fill={RISK_CHART_COLORS[code]} stroke="#fff" strokeWidth={2}
-            radius={index === RISK_ORDER.length - 1 ? [4, 4, 0, 0] : 0} />
-        ))}
-      </BarChart>
-    </ResponsiveContainer>
-  );
-}

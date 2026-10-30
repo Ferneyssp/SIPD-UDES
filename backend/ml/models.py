@@ -60,7 +60,7 @@ class ModelVersion(models.Model):
 
 class DatasetSource(models.TextChoices):
     UPLOAD = "CARGA", "Archivo CSV cargado"
-    REFERENCE = "REFERENCIA", "Dataset de referencia del proyecto (sintético)"
+    REFERENCE = "REFERENCIA", "Dataset de referencia del proyecto"
 
 
 class DatasetStatus(models.TextChoices):

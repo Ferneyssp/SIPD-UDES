@@ -5,18 +5,24 @@ import { useEffect, useId, useRef } from "react";
 export default function Modal({ open, title, onClose, children, footer, size = "md" }) {
   const titleId = useId();
   const dialogRef = useRef(null);
+  // onClose suele ser una función nueva en cada render: se guarda en una ref para que el efecto
+  // de foco se ejecute sólo al abrir (si no, el foco saltaría al primer control en cada tecla).
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return undefined;
-    const onKey = (event) => event.key === "Escape" && onClose?.();
+    const onKey = (event) => event.key === "Escape" && onCloseRef.current?.();
     document.addEventListener("keydown", onKey);
     const previous = document.activeElement;
-    dialogRef.current?.querySelector("input, select, textarea, button")?.focus();
+    const dialog = dialogRef.current;
+    (dialog?.querySelector(".modal-body input, .modal-body select, .modal-body textarea")
+      || dialog?.querySelector("input, select, textarea, button"))?.focus();
     return () => {
       document.removeEventListener("keydown", onKey);
       previous?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   return (

@@ -23,6 +23,11 @@ class CsvValidatorTests(SimpleTestCase):
         self.assertEqual((report.records_found, report.records_valid, report.records_failed), (1, 1, 0))
         self.assertTrue(report.valid_rows[0]["works_while_studying"])
 
+    def test_academic_probation_status_no_longer_exists(self):
+        report = validate_csv(csv_bytes("E120,SIS,2026-2,3,3.5,18,15,3,1,90,Prueba académica,"), PROGRAMS)
+        self.assertEqual(report.records_valid, 0)
+        self.assertIn("academic_status", {e["column"] for e in report.errors})
+
     def test_missing_required_columns(self):
         with self.assertRaises(FileRejected):
             validate_csv(b"student_code,gpa\nE001,3.2\n", PROGRAMS)
@@ -94,6 +99,32 @@ class UploadFlowTests(SipdAPITestCase):
         response = self._upload(csv_bytes("E300,SIS,2026-2,2,2.8,16,10,6,2,170,Activo,1"))
         self.assertEqual(response.status_code, 422)
         self.assertEqual(response.data["status"], "RECHAZADO")
+
+    def test_rejected_upload_is_not_stored(self):
+        from uploads.models import DataUpload
+
+        response = self.client_for(self.admin).post(
+            "/api/uploads/", {"file": SimpleUploadedFile("solo_errores.csv", csv_bytes("E1,XYZ,2026-9,0,9,1,1,1,1,200,Nada,"),
+                                                        content_type="text/csv")}, format="multipart")
+        self.assertEqual(response.status_code, 422)
+        self.assertIsNone(response.data["id"])
+        self.assertFalse(DataUpload.objects.exists())
+        self.assertEqual(self.client_for(self.admin).get("/api/uploads/").data["count"], 0)
+
+    def test_validated_upload_can_be_discarded(self):
+        from uploads.models import DataUpload
+
+        client = self.client_for(self.admin)
+        upload = client.post("/api/uploads/", {"file": SimpleUploadedFile(
+            "ok.csv", csv_bytes("E120,SIS,2026-2,3,3.5,18,15,3,1,90,Activo,"), content_type="text/csv")}, format="multipart").data
+        self.assertEqual(upload["status"], "VALIDADO")
+        self.assertEqual(client.post(f"/api/uploads/{upload['id']}/discard/").status_code, 200)
+        self.assertFalse(DataUpload.objects.exists())
+        processed = client.post("/api/uploads/", {"file": SimpleUploadedFile(
+            "ok.csv", csv_bytes("E121,SIS,2026-2,3,3.5,18,15,3,1,90,Activo,"), content_type="text/csv")}, format="multipart").data
+        client.post(f"/api/uploads/{processed['id']}/confirm/", {"run_predictions": False}, format="json")
+        self.assertEqual(client.post(f"/api/uploads/{processed['id']}/discard/").status_code, 409)  # las procesadas se conservan
+        self.assertEqual(self.client_for(self.coordinator).post(f"/api/uploads/{processed['id']}/discard/").status_code, 403)
 
     def test_non_csv_extension_rejected(self):
         self.assertEqual(self._upload(b"hola", name="malware.exe").status_code, 400)

@@ -62,7 +62,8 @@ class TrainingRunListSerializer(TrainingRunSerializer):
 class StartRunSerializer(serializers.Serializer):
     dataset = serializers.PrimaryKeyRelatedField(queryset=TrainingDataset.objects.all())
     algorithms = serializers.ListField(child=serializers.CharField(max_length=40), allow_empty=False, max_length=10)
-    selection_metric = serializers.CharField(max_length=20)
+    # Opcional: si se omite se usa la métrica por defecto del procedimiento (F1).
+    selection_metric = serializers.CharField(max_length=20, required=False, default="f1")
     confirm = serializers.BooleanField()
 
     def validate_confirm(self, value):

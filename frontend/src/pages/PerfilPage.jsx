@@ -35,8 +35,9 @@ export default function PerfilPage() {
     setSaving(true);
     try {
       await authService.changePassword(form);
+      // Por seguridad se cierran todas las sesiones; el inicio de sesión confirma que el cambio se hizo.
       logoutLocal();
-      navigate("/login", { replace: true });
+      navigate("/login?aviso=contrasena-actualizada", { replace: true });
     } catch (err) {
       setErrors(getFieldErrors(err));
       setError(getErrorMessage(err, "No se pudo cambiar la contraseña."));

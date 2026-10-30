@@ -65,7 +65,11 @@ def predict_records(records: list[AcademicRecord], user=None) -> list[Prediction
         )
         for record, result in zip(records, results)
     ]
-    return Prediction.objects.bulk_create(predictions)
+    created = Prediction.objects.bulk_create(predictions)
+    from alerts.services import evaluate_predictions
+
+    evaluate_predictions(created)
+    return created
 
 
 def predict_period(period: AcademicPeriod, user=None, program_ids=None, batch_size: int = 500) -> int:

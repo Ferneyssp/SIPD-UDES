@@ -1,5 +1,5 @@
 student_code,program_code,academic_period,semester,gpa,credits_enrolled,credits_approved,credits_failed,failed_subjects,attendance_percentage,academic_status,course_repetitions,works_while_studying,socioeconomic_stratum,financial_difficulty,motivation_level
-E901,SIS,2026-2,7,2.85,13,13,0,0,88.7,Prueba académica,0,1,4,1,4
+E901,SIS,2026-2,7,2.85,13,13,0,0,88.7,Activo,0,1,4,1,4
 E902,SIS,2026-2,2,3.46,15,15,0,0,83.8,Activo,1,0,1,,4
 E903,SIS,2026-2,7,3.48,18,18,0,0,85.4,Activo,0,0,2,2,4
 E904,ELE,2026-2,7,3.86,19,19,0,0,88.2,Activo,1,1,,,3
@@ -9,13 +9,13 @@ E907,SOF,2026-2,4,3.76,15,15,0,0,100.0,Activo,0,1,2,2,
 E908,SIS,2026-2,1,3.35,13,13,0,0,80.4,Activo,2,,,1,3
 E909,ELE,2026-2,7,3.67,12,12,0,0,77.2,Activo,0,0,3,3,4
 E910,CIV,2026-2,7,3.07,17,17,0,0,72.3,Activo,2,0,6,2,3
-E911,IND,2026-2,7,2.4,20,20,0,0,67.7,Prueba académica,2,0,2,3,2
+E911,IND,2026-2,7,2.4,20,20,0,0,67.7,Activo,2,0,2,3,2
 E912,CIV,2026-2,7,4.06,20,20,0,0,90.3,Activo,0,0,1,3,4
 E913,CIV,2026-2,2,3.53,13,13,0,0,83.8,Activo,2,,1,2,5
 E914,IND,2026-2,4,3.12,12,12,0,0,76.5,Activo,1,,1,3,2
-E915,CIV,2026-2,1,2.75,18,18,0,0,73.4,Prueba académica,2,1,2,,
+E915,CIV,2026-2,1,2.75,18,18,0,0,73.4,Activo,2,1,2,,
 E916,ELE,2026-2,8,4.32,12,12,0,0,90.8,Activo,1,0,,3,5
-E917,IND,2026-2,7,2.52,12,12,0,0,66.2,Prueba académica,1,0,,1,
+E917,IND,2026-2,7,2.52,12,12,0,0,66.2,Activo,1,0,,1,
 E918,IND,2026-2,8,3.14,15,15,0,0,83.4,Activo,2,0,1,5,4
 E919,SOF,2026-2,2,3.74,13,13,0,0,83.4,Activo,0,0,3,3,
 E920,CIV,2026-2,6,3.61,15,15,0,0,80.1,Activo,1,0,,,3

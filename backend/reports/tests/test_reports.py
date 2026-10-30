@@ -4,7 +4,6 @@ import io
 from audit.models import AuditAction, AuditLog
 from config.risk import RiskLevel
 from config.testing import SipdAPITestCase
-from ml.models import ModelVersion
 from predictions.models import Prediction, PredictionStatus
 from reports.exporters import safe_cell
 
@@ -32,7 +31,7 @@ class ReportApiTests(SipdAPITestCase):
         self.assertTrue(any("estimación" in notice for notice in data["notices"]))
 
     def test_risk_report_respects_scope_and_filters(self):
-        data = self.client_for(self.professor).get("/api/reports/risk/?period=2026-2").data
+        data = self.client_for(self.coordinator_sis).get("/api/reports/risk/?period=2026-2").data
         self.assertEqual(data["totals"]["students"], 1)
         self.assertEqual([row["program"] for row in data["by_program"]], ["Ingeniería de Sistemas"])
         self.assertTrue(data["scope_restricted"])
@@ -48,7 +47,7 @@ class ReportApiTests(SipdAPITestCase):
         self.assertTrue(AuditLog.objects.filter(action=AuditAction.REPORT_EXPORTED).exists())
 
     def test_individual_listing_is_admin_only_and_excludes_sensitive_fields(self):
-        for user in (self.coordinator, self.professor):
+        for user in (self.coordinator, self.coordinator_sis):
             self.assertEqual(self.client_for(user).get("/api/reports/risk/students/csv/").status_code, 403)
         rows = read_csv(self.client_for(self.admin).get("/api/reports/risk/students/csv/?period=2026-2"))
         self.assertEqual(len(rows) - 1, self.predictions.count())
@@ -59,7 +58,7 @@ class ReportApiTests(SipdAPITestCase):
     def test_pdf_exports(self):
         admin = self.client_for(self.admin)
         for url in ("/api/reports/risk/pdf/?period=2026-2", "/api/reports/risk/pdf/?period=2025-1",
-                    "/api/reports/models/pdf/", "/api/reports/activity/pdf/"):
+                    ):
             response = admin.get(url)
             self.assertEqual(response.status_code, 200, url)
             self.assertEqual(response["Content-Type"], "application/pdf")
@@ -67,26 +66,21 @@ class ReportApiTests(SipdAPITestCase):
         # Un filtro con marcado no rompe el documento.
         self.assertEqual(admin.get("/api/reports/risk/pdf/?program=<b>X").status_code, 200)
 
-    def test_model_report_and_csv(self):
-        data = self.client_for(self.professor).get("/api/reports/models/").data
-        version = ModelVersion.objects.get(active=True)
-        row = next(v for v in data["versions"] if v["id"] == version.pk)
-        self.assertEqual(row["metrics"]["f1"], version.metrics["f1"])
-        self.assertIsNone(row["approved_by"])  # sin datos de usuarios para roles no administradores
-        rows = read_csv(self.client_for(self.admin).get("/api/reports/models/csv/"))
-        self.assertIn("F1 (prueba)", rows[0])
-        self.assertEqual(len(rows) - 1, ModelVersion.objects.count())
+    def test_model_evaluation_report_was_removed(self):
+        admin = self.client_for(self.admin)
+        for url in ("/api/reports/models/", "/api/reports/models/csv/", "/api/reports/models/pdf/"):
+            self.assertEqual(admin.get(url).status_code, 404, url)
 
-    def test_activity_report_is_admin_only(self):
-        for user in (self.coordinator, self.professor):
-            client = self.client_for(user)
-            self.assertEqual(client.get("/api/reports/activity/").status_code, 403)
-            self.assertEqual(client.get("/api/reports/activity/csv/").status_code, 403)
-            self.assertEqual(client.get("/api/reports/activity/pdf/").status_code, 403)
-        data = self.client_for(self.admin).get("/api/reports/activity/").data
-        counts = {item["action"]: item["count"] for item in data["audit_counts"]}
-        self.assertEqual(counts[AuditAction.PREDICTION_RUN], 1)
-        self.assertIsNotNone(data["coverage_since"])
+    def test_activity_report_and_audit_module_were_removed(self):
+        admin = self.client_for(self.admin)
+        for url in ("/api/reports/activity/", "/api/reports/activity/csv/", "/api/reports/activity/pdf/", "/api/audit/"):
+            self.assertEqual(admin.get(url).status_code, 404, url)
+
+    def test_reports_do_not_label_data_as_synthetic(self):
+        risk = self.client_for(self.admin).get("/api/reports/risk/?period=2026-2").data
+        text = str(risk)
+        self.assertNotIn("is_synthetic", text)
+        self.assertNotIn("SINTÉTICOS", text.upper().replace("SINTETICOS", "SINTÉTICOS"))
 
     def test_csv_cells_are_protected_against_formulas(self):
         self.assertEqual(safe_cell("=HYPERLINK(\"x\")"), "'=HYPERLINK(\"x\")")

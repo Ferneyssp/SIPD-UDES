@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { SYSTEM_TITLE } from "../config/appConfig";
 import { useAuth } from "../context/AuthContext";
 import { initials } from "../utils/format";
+import GlobalSearch from "./GlobalSearch";
 import NotificationBell from "./NotificationBell";
 
 export default function Topbar({ subtitle, onToggleMenu }) {
@@ -16,6 +17,7 @@ export default function Topbar({ subtitle, onToggleMenu }) {
         <p className="topbar-system">{SYSTEM_TITLE}</p>
         {subtitle && <p className="topbar-subtitle">{subtitle}</p>}
       </div>
+      <GlobalSearch />
       <NotificationBell />
       <Link to="/perfil" className="topbar-user" aria-label="Ver perfil">
         <span className="avatar" aria-hidden="true">{initials(user)}</span>

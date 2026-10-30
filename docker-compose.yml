@@ -49,19 +49,30 @@ services:
       RISK_LOW_THRESHOLD: ${RISK_LOW_THRESHOLD:-0.30}
       RISK_MEDIUM_THRESHOLD: ${RISK_MEDIUM_THRESHOLD:-0.60}
       SECURE_COOKIES: "False"
-      SEED_DEMO: ${SEED_DEMO:-true}
+      # Docker local se sirve por http: sin redirección HTTPS ni HSTS. En producción, detrás de HTTPS,
+      # elimine estas dos líneas.
+      SECURE_SSL_REDIRECT: "False"
+      SECURE_HSTS_SECONDS: "0"
+      # Nginx (servicio frontend) es el único proxy de confianza delante del backend.
+      TRUSTED_PROXY_COUNT: "1"
+      # Datos demo sólo si se piden explícitamente; sin DEMO_PASSWORD se genera una contraseña aleatoria.
+      SEED_DEMO: ${SEED_DEMO:-false}
       DEMO_PASSWORD: ${DEMO_PASSWORD:-}
       ML_TRAINING_EXECUTOR: ${ML_TRAINING_EXECUTOR:-thread}
       ML_ACCEPTANCE_MIN_F1: ${ML_ACCEPTANCE_MIN_F1:-}
       ML_ACCEPTANCE_MIN_RECALL: ${ML_ACCEPTANCE_MIN_RECALL:-}
       INSTITUTION_NAME: ${INSTITUTION_NAME:-Institución de Educación Superior}
+      EMAIL_HOST_USER: sipd.udes.edu@gmail.com
+      EMAIL_HOST_PASSWORD: oyeiqqocnrqqzvvq
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
     volumes:
       - media_data:/app/media
       # Versiones de modelos (incluidas las reentrenadas desde la web). En el primer arranque Docker copia
       # en el volumen los modelos incluidos en la imagen.
       - ml_models:/app/backend/ml_models
     ports:
-      - "8000:8000"
+      # Sólo accesible desde el equipo: el acceso normal es a través de Nginx (puerto 5173).
+      - "127.0.0.1:8000:8000"
 
   frontend:
     build:

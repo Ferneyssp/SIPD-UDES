@@ -23,7 +23,8 @@ def active_program_codes() -> set[str]:
 
 
 def create_validated_upload(uploaded_file, user) -> DataUpload:
-    """Valida el archivo y registra la carga. No modifica datos académicos."""
+    """Valida el archivo. Sólo se guarda si queda validado (pendiente de confirmar); una carga rechazada se
+    devuelve sin guardar, sólo para mostrar su informe de errores. No modifica datos académicos."""
     check_file(uploaded_file)
     raw = uploaded_file.read()
     checksum = hashlib.sha256(raw).hexdigest()
@@ -35,8 +36,6 @@ def create_validated_upload(uploaded_file, user) -> DataUpload:
         upload.status = UploadStatus.REJECTED
         upload.message = str(exc)
         upload.errors = [{"row": None, "column": "-", "message": str(exc), "value": None}]
-        upload.file.save(f"{checksum[:16]}.csv", uploaded_file, save=False)
-        upload.save()
         return upload
 
     upload.records_found = report.records_found
@@ -46,6 +45,7 @@ def create_validated_upload(uploaded_file, user) -> DataUpload:
     if report.records_valid == 0:
         upload.status = UploadStatus.REJECTED
         upload.message = "Ningún registro es válido. Corrija los errores e intente de nuevo."
+        return upload
     else:
         upload.status = UploadStatus.VALIDATED
         upload.message = "Archivo validado. Revise los errores y confirme la carga."

@@ -1,4 +1,4 @@
-import { AlertTriangle, BrainCircuit, CheckCircle2, ChevronRight, MinusCircle, Users } from "lucide-react";
+import { AlertTriangle, BellRing, BrainCircuit, CheckCircle2, ChevronRight, MinusCircle, Users } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import Alert from "../components/Alert";
 import Card, { StatCard } from "../components/Card";
@@ -7,14 +7,15 @@ import ErrorMessage from "../components/ErrorMessage";
 import Filter, { FilterBar } from "../components/Filter";
 import Loading from "../components/Loading";
 import PageHeader from "../components/PageHeader";
-import RiskBadge, { RiskBar } from "../components/RiskBadge";
+import { manageAlertPath } from "./AlertasPage";
+import RiskBadge, { RiskBar, RiskChange } from "../components/RiskBadge";
 import { RiskByProgramChart, RiskDistributionChart } from "../components/RiskCharts";
 import StatusBadge from "../components/StatusBadge";
 import { PREDICTION_DISCLAIMER } from "../config/appConfig";
 import { useConfig } from "../context/ConfigContext";
 import { useApi } from "../hooks/useApi";
 import { useFilters } from "../hooks/useFilters";
-import { predictionService } from "../services/api";
+import { alertService, predictionService } from "../services/api";
 import { formatDate, formatNumber, formatPercent, shortProgram } from "../utils/format";
 
 const SEMESTERS = Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: `Semestre ${i + 1}` }));
@@ -28,9 +29,18 @@ export default function InicioPage() {
     [JSON.stringify(filters)],
     { errorMessage: "Error al cargar la información de Inicio." },
   );
+  const alerts = useApi(() => alertService.summary({ period: filters.period }), [filters.period]);
+  // Las tarjetas abren el listado de estudiantes con el mismo filtro aplicado.
+  const listLink = (level) => {
+    const query = new URLSearchParams();
+    if (level) query.set("risk_level", level);
+    for (const key of ["program", "semester", "period", "followup_status"]) if (filters[key]) query.set(key, filters[key]);
+    return `/estudiantes${query.toString() ? `?${query}` : ""}`;
+  };
 
   const levelOptions = (config?.risk_levels || []).map((level) => ({ value: level.code, label: level.label })).reverse();
-  const attentionLevel = levelOptions.find((option) => option.value === filters.risk_level)?.label || "Alto";
+  // Sin nivel seleccionado ("Todos") el resumen incluye todos los niveles.
+  const attentionLevel = levelOptions.find((option) => option.value === filters.risk_level)?.label;
 
   const columns = [
     { key: "anonymous_code", header: "Identificador", render: (row) => <Link className="link-strong" to={`/estudiantes/${row.anonymous_code}`}>{row.anonymous_code}</Link> },
@@ -38,6 +48,7 @@ export default function InicioPage() {
     { key: "semester", header: "Semestre", align: "center" },
     { key: "risk", header: "Riesgo estimado", render: (row) => <RiskBar probability={row.current_probability} level={row.current_risk_level} /> },
     { key: "level", header: "Nivel", render: (row) => <RiskBadge level={row.current_risk_level} /> },
+    { key: "change", header: "Cambio", render: (row) => <RiskChange points={row.risk_change_points} /> },
     { key: "date", header: "Fecha de predicción", render: (row) => formatDate(row.current_prediction_date) },
     { key: "followup", header: "Seguimiento", render: (row) => <StatusBadge status={row.latest_followup_status || "SIN_SEGUIMIENTO"} label={row.latest_followup_status_display} /> },
     {
@@ -60,7 +71,7 @@ export default function InicioPage() {
           options={programs.map((p) => ({ value: p.code, label: p.name }))} />
         <Filter label="Periodo" value={filters.period} onChange={(v) => setFilter("period", v)} allLabel="Actual"
           options={periods.map((p) => ({ value: p.code, label: p.code }))} />
-        <Filter label="Nivel de riesgo" value={filters.risk_level} onChange={(v) => setFilter("risk_level", v)} allLabel="Alto (por defecto)"
+        <Filter label="Nivel de riesgo" value={filters.risk_level} onChange={(v) => setFilter("risk_level", v)} allLabel="Todos"
           options={levelOptions} />
         <Filter label="Semestre" value={filters.semester} onChange={(v) => setFilter("semester", v)} options={SEMESTERS} />
         <Filter label="Seguimiento" value={filters.followup_status} onChange={(v) => setFilter("followup_status", v)}
@@ -77,21 +88,16 @@ export default function InicioPage() {
               No hay un modelo entrenado activo; las predicciones no pueden actualizarse.
             </Alert>
           )}
-          {data.model?.is_synthetic && (
-            <Alert type="info" title="Entorno de demostración.">
-              El modelo activo ({data.model.name}) fue entrenado con datos sintéticos; los resultados no representan estudiantes reales.
-            </Alert>
-          )}
 
           <div className="stats-grid">
-            <StatCard label="Total de estudiantes" value={formatNumber(totals.students)} icon={Users} tone="info"
+            <StatCard label="Total de estudiantes" value={formatNumber(totals.students)} icon={Users} tone="info" to={listLink(filters.risk_level)}
               caption={data.scope_restricted ? "En sus programas asignados" : "Estudiantes activos registrados"} />
             <StatCard label="Riesgo alto" value={formatNumber(totals.high)} detail={`(${formatPercent(totals.high_pct)})`}
-              icon={AlertTriangle} tone="high" caption="Atención prioritaria" />
+              icon={AlertTriangle} tone="high" caption="Atención prioritaria" to={listLink("ALTO")} />
             <StatCard label="Riesgo medio" value={formatNumber(totals.medium)} detail={`(${formatPercent(totals.medium_pct)})`}
-              icon={MinusCircle} tone="medium" caption="Bajo monitoreo" />
+              icon={MinusCircle} tone="medium" caption="Bajo monitoreo" to={listLink("MEDIO")} />
             <StatCard label="Riesgo bajo" value={formatNumber(totals.low)} detail={`(${formatPercent(totals.low_pct)})`}
-              icon={CheckCircle2} tone="low" caption="Situación estable" />
+              icon={CheckCircle2} tone="low" caption="Situación estable" to={listLink("BAJO")} />
             <StatCard label="Predicciones realizadas" value={formatNumber(totals.predictions)} icon={BrainCircuit} tone="neutral"
               caption={`Vigentes en ${data.period || "el periodo"}${totals.without_prediction ? ` · ${totals.without_prediction} sin predicción` : ""}`} />
           </div>
@@ -108,9 +114,29 @@ export default function InicioPage() {
           )}
 
           <Card
-            title={<>Estudiantes que requieren atención <span className={`badge ${filters.risk_level === "BAJO" ? "risk-low" : filters.risk_level === "MEDIO" ? "risk-medium" : "risk-high"}`}>Riesgo {attentionLevel}</span></>}
-            subtitle={`${data.attention_total} estudiante(s) identificados para seguimiento. Se muestran los de mayor riesgo estimado.`}
-            actions={<Link className="link-action" to={`/estudiantes?risk_level=${filters.risk_level || "ALTO"}&ordering=-current_probability`}>Ver todos <ChevronRight size={16} /></Link>}
+            title="Alertas tempranas recientes"
+            subtitle={alerts.data ? `${alerts.data.open} abiertas · ${alerts.data.in_progress} en atención · ${alerts.data.unassigned} sin responsable` : null}
+            actions={<Link className="link-action" to="/alertas">Ver alertas <ChevronRight size={16} /></Link>}
+            padded={false}
+          >
+            <DataTable caption="Alertas recientes" rows={alerts.data?.recent} loading={alerts.loading} error={alerts.error}
+              onRetry={alerts.reload} emptyTitle="No hay alertas pendientes."
+              onRowClick={(row) => navigate(manageAlertPath(row.student_code))}
+              columns={[
+                { key: "student_code", header: "Estudiante", render: (a) => <Link className="link-strong" to={manageAlertPath(a.student_code)}><BellRing size={14} aria-hidden="true" /> {a.student_code}</Link> },
+                { key: "program", header: "Programa", render: (a) => shortProgram(a.program) },
+                { key: "reason_display", header: "Motivo", className: "cell-wrap" },
+                { key: "priority_display", header: "Prioridad" },
+                { key: "assigned_to_name", header: "Responsable", render: (a) => a.assigned_to_name || "Sin asignar" },
+              ]} />
+          </Card>
+
+          <Card
+            title={<>Estudiantes que requieren atención {attentionLevel
+              ? <span className={`badge ${filters.risk_level === "BAJO" ? "risk-low" : filters.risk_level === "MEDIO" ? "risk-medium" : "risk-high"}`}>Riesgo {attentionLevel}</span>
+              : <span className="badge status-neutral">Todos los niveles</span>}</>}
+            subtitle={`${data.attention_total} estudiante(s) con predicción. Se muestran los de mayor riesgo estimado.`}
+            actions={<Link className="link-action" to={listLink(filters.risk_level)}>Ver todos <ChevronRight size={16} /></Link>}
             padded={false}
           >
             <DataTable

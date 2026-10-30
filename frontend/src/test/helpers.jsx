@@ -8,7 +8,11 @@ export const ADMIN = {
   id: 1, username: "admin", email: "admin@sipd.demo", first_name: "Admin", last_name: "Demo",
   role: "ADMIN", role_display: "Administrador", is_active: true, programs: [], can_manage_users_effective: true,
 };
-export const PROFESSOR = { ...ADMIN, id: 2, username: "profesor", role: "PROFESSOR", role_display: "Profesor", can_manage_users_effective: false };
+/** Coordinador de un solo programa (ámbito restringido). */
+export const COORDINATOR = {
+  ...ADMIN, id: 2, username: "coordinador", role: "COORDINATOR", role_display: "Coordinador académico",
+  can_manage_users_effective: false, programs: [{ id: 1, code: "SIS", name: "Ingeniería de Sistemas" }],
+};
 
 export const CONFIG = {
   risk_thresholds: { low: 0.3, medium: 0.6 },

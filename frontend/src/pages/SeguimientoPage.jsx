@@ -1,5 +1,5 @@
 import { Pencil, Plus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Button from "../components/Button";
 import Card from "../components/Card";
@@ -24,11 +24,21 @@ export default function SeguimientoPage() {
   const [modal, setModal] = useState({ open: false, followup: null });
   const page = Number(filters.page || 1);
   const { data, loading, error, reload } = useApi(
-    () => followupService.list({ ...filters, page, page_size: PAGE_SIZE }),
+    // Un registro por estudiante (su último seguimiento); el historial completo está en Historial y en la ficha.
+    () => followupService.list({ ...filters, nuevo: undefined, latest: "true", page, page_size: PAGE_SIZE }),
     [JSON.stringify(filters)],
     { errorMessage: "Error al cargar los seguimientos." },
   );
   const responsibles = useApi(() => followupService.responsibles(), []);
+
+  // Desde una alerta ("Gestionar seguimiento") se llega con ?student=E001&nuevo=1: se abre el formulario
+  // para ese estudiante. Al guardarlo, la alerta pasa a "En atención" (o se cierra si queda Atendido/Cerrado).
+  useEffect(() => {
+    if (filters.nuevo === "1" && filters.student) {
+      setModal({ open: true, followup: null, studentCode: filters.student });
+      setFilter("nuevo", "");
+    }
+  }, [filters.nuevo, filters.student, setFilter]);
 
   const columns = [
     { key: "follow_up_date", header: "Fecha", render: (f) => formatDate(f.follow_up_date) },
@@ -43,11 +53,12 @@ export default function SeguimientoPage() {
   return (
     <>
       <PageHeader
-        title="Bitácora de intervenciones"
-        badge={data ? `${formatNumber(data.count)} registros` : null}
+        title="Seguimiento de estudiantes"
+        badge={data ? `${formatNumber(data.count)} estudiantes` : null}
+        description="Último seguimiento de cada estudiante. Use Editar para actualizar su estado; el historial completo está en Historial y en la ficha."
         actions={<Button icon={Plus} onClick={() => setModal({ open: true, followup: null })}>Nueva intervención</Button>}
       />
-      <FilterBar onClear={clearFilters} hasActive={Object.keys(filters).length > 0}>
+      <FilterBar onClear={clearFilters} hasActive={Object.keys(filters).some((k) => k !== "page" && k !== "nuevo")}>
         <SearchBar value={filters.student || ""} onChange={(v) => setFilter("student", v.toUpperCase())} placeholder="Código del estudiante (E001)" label="Estudiante" />
         <Filter label="Estado" value={filters.status} onChange={(v) => setFilter("status", v)}
           options={(config?.followup_statuses || []).filter((s) => s.value !== "SIN_SEGUIMIENTO")} />
@@ -66,6 +77,7 @@ export default function SeguimientoPage() {
       <FollowUpFormModal
         open={modal.open}
         followup={modal.followup}
+        studentCode={modal.studentCode}
         onClose={() => setModal({ open: false, followup: null })}
         onSaved={() => { setModal({ open: false, followup: null }); reload(); }}
       />

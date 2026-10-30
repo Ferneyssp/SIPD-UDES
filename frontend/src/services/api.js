@@ -14,10 +14,12 @@ export function cleanParams(params = {}) {
 }
 
 export const authService = {
-  login: (username, password) => data(apiClient.post("/auth/login/", { username, password })),
-  logout: (refresh) => data(apiClient.post("/auth/logout/", { refresh })),
+  login: (username, password, remember) => data(apiClient.post("/auth/login/", { username, password, remember: Boolean(remember) })),
+  logout: () => data(apiClient.post("/auth/logout/")),
   me: () => data(apiClient.get("/auth/me/")),
   changePassword: (payload) => data(apiClient.post("/auth/change-password/", payload)),
+  requestPasswordReset: (email) => data(apiClient.post("/auth/password-reset/", { email })),
+  confirmPasswordReset: (payload) => data(apiClient.post("/auth/password-reset/confirm/", payload)),
 };
 
 export const catalogService = {
@@ -26,11 +28,16 @@ export const catalogService = {
   periods: () => data(apiClient.get("/periods/")),
 };
 
+/** Estudiantes: sólo lectura (los datos se actualizan con la carga CSV). */
 export const studentService = {
   list: (params) => data(apiClient.get("/students/", { params: cleanParams(params) })),
   get: (code) => data(apiClient.get(`/students/${encodeURIComponent(code)}/`)),
-  create: (payload) => data(apiClient.post("/students/", payload)),
-  update: (code, payload) => data(apiClient.patch(`/students/${encodeURIComponent(code)}/`, payload)),
+  exportCsv: (params) => apiClient.get("/students/export/", { params: cleanParams(params), responseType: "blob" }),
+};
+
+export const alertService = {
+  list: (params) => data(apiClient.get("/alerts/", { params: cleanParams(params) })),
+  summary: (params) => data(apiClient.get("/alerts/summary/", { params: cleanParams(params) })),
 };
 
 export const predictionService = {
@@ -42,7 +49,6 @@ export const predictionService = {
     data(apiClient.post("/predictions/run-batch/", cleanParams({ academic_period: academicPeriod, program }))),
   history: (student, includeSuperseded = false) =>
     data(apiClient.get("/predictions/history/", { params: { student, include_superseded: includeSuperseded } })),
-  trend: (params) => data(apiClient.get("/predictions/trend/", { params: cleanParams(params) })),
   summary: (params) => data(apiClient.get("/predictions/summary/", { params: cleanParams(params) })),
 };
 
@@ -56,7 +62,7 @@ export const followupService = {
   list: (params) => data(apiClient.get("/followups/", { params: cleanParams(params) })),
   create: (payload) => data(apiClient.post("/followups/", payload)),
   update: (id, payload) => data(apiClient.patch(`/followups/${id}/`, payload)),
-  responsibles: () => data(apiClient.get("/followups/responsibles/")),
+  responsibles: (student) => data(apiClient.get("/followups/responsibles/", { params: cleanParams({ student }) })),
 };
 
 export const uploadService = {
@@ -67,6 +73,7 @@ export const uploadService = {
     return data(apiClient.post("/uploads/", form, { headers: { "Content-Type": "multipart/form-data" } }));
   },
   confirm: (id, runPredictions) => data(apiClient.post(`/uploads/${id}/confirm/`, { run_predictions: runPredictions })),
+  discard: (id) => data(apiClient.post(`/uploads/${id}/discard/`)),
   downloadTemplate: () => apiClient.get("/uploads/template/", { responseType: "blob" }),
 };
 
@@ -85,7 +92,6 @@ export const trainingService = {
     form.append("file", file);
     return data(apiClient.post("/training/datasets/", form, { headers: { "Content-Type": "multipart/form-data" } }));
   },
-  useReferenceDataset: () => data(apiClient.post("/training/datasets/", { source: "reference" })),
   start: (payload) => data(apiClient.post("/training/runs/", { ...payload, confirm: true })),
   runs: (params) => data(apiClient.get("/training/runs/", { params: cleanParams(params) })),
   run: (id) => data(apiClient.get(`/training/runs/${id}/`)),
@@ -94,8 +100,6 @@ export const trainingService = {
   approve: (id, notes) => data(apiClient.post(`/models/${id}/approve/`, { notes })),
   reject: (id, notes) => data(apiClient.post(`/models/${id}/reject/`, { notes })),
   activate: (id) => data(apiClient.post(`/models/${id}/activate/`)),
-  rollback: (id) => data(apiClient.post(`/models/${id}/rollback/`)),
-  activations: () => data(apiClient.get("/models/activations/")),
 };
 
 export const notificationService = {
@@ -105,7 +109,7 @@ export const notificationService = {
   markAllRead: () => data(apiClient.post("/notifications/read-all/")),
 };
 
-/** kind: risk | models | activity. Las descargas devuelven la respuesta completa (blob + cabeceras). */
+/** kind: risk. Las descargas devuelven la respuesta completa (blob + cabeceras). */
 export const reportService = {
   get: (kind, params) => data(apiClient.get(`/reports/${kind}/`, { params: cleanParams(params) })),
   download: (path, params) => apiClient.get(`/reports/${path}/`, { params: cleanParams(params), responseType: "blob" }),

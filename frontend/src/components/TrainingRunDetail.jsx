@@ -1,4 +1,4 @@
-import { CheckCircle2, Loader2, Power, ShieldCheck, ThumbsDown, Timer, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, Power, RotateCcw, RotateCw, ShieldCheck, ThumbsDown, Timer, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { trainingService } from "../services/api";
 import { getErrorMessage } from "../utils/errors";
@@ -7,7 +7,6 @@ import Alert from "./Alert";
 import Button from "./Button";
 import Card from "./Card";
 import ConfirmationModal from "./ConfirmationModal";
-import DataTable from "./DataTable";
 import ErrorMessage from "./ErrorMessage";
 import Loading from "./Loading";
 import StatusBadge from "./StatusBadge";
@@ -107,94 +106,114 @@ function Timeline({ events }) {
   );
 }
 
-function VersionReview({ version, comparison, acceptance, onAction, busy }) {
+/**
+ * Resultado de un modelo como "flashcard": el frente resume las métricas de prueba frente al modelo
+ * activo y las acciones; el reverso, la matriz de confusión y los criterios de aceptación.
+ */
+function ModelFlashcard({ version, comparison, onAction, busy }) {
+  const [flipped, setFlipped] = useState(false);
   const [confirm, setConfirm] = useState(null);
+  const acceptance = version.acceptance;
+  const rows = Object.fromEntries((comparison?.rows || []).map((row) => [row.metric, row]));
   const run = async () => {
     await onAction(confirm, version);
     setConfirm(null);
   };
   const confirmText = {
     approve: `Se aprobará ${version.name} v${version.version}. Aprobar no la activa: el modelo activo no cambia hasta que la active explícitamente.`,
-    reject: `Se rechazará ${version.name} v${version.version}. Permanecerá registrada pero no podrá activarse.`,
+    reject: `Se rechazará ${version.name} v${version.version}. Se eliminará: los modelos rechazados no se guardan.`,
     activate: `Las nuevas predicciones usarán ${version.name} v${version.version}. La versión activa actual se conservará y podrá recuperarse. Las predicciones ya generadas no cambian.`,
   };
+  const matrix = version.metrics?.confusion_matrix;
 
   return (
-    <article className="version-review">
-      <header className="version-review-head">
-        <div>
-          <h3>{version.name} <small className="text-muted">v{version.version}</small></h3>
-          <div className="badge-row">
-            {version.selected && <StatusBadge className="status-info" label="Mejor según la métrica de selección" />}
-            <StatusBadge className={APPROVAL_CLASS[version.approval_status]} label={version.approval_status_display} />
-            {version.active && <StatusBadge className="status-success" label="Activo" />}
+    <article className={`flashcard ${flipped ? "flipped" : ""}`} aria-label={`${version.name} v${version.version}`}>
+      <div className="flashcard-inner">
+        <section className="flashcard-face front" aria-hidden={flipped} inert={flipped ? "" : undefined}>
+          <header className="flashcard-head">
+            <div>
+              <h3>{version.name}</h3>
+              <small className="text-muted">v{version.version}</small>
+            </div>
+            <div className="badge-row">
+              <StatusBadge className={APPROVAL_CLASS[version.approval_status]} label={version.approval_status_display} />
+              {version.active && <StatusBadge className="status-success" label="Activo" />}
+            </div>
+          </header>
+          <table className="flashcard-metrics">
+            <thead>
+              <tr><th scope="col">Métrica</th><th scope="col">Nuevo</th><th scope="col">Activo</th><th scope="col">Dif.</th></tr>
+            </thead>
+            <tbody>
+              {METRICS.map(([key, label]) => (
+                <tr key={key}>
+                  <th scope="row">{label}</th>
+                  <td><strong>{formatMetric(version.metrics?.[key])}</strong></td>
+                  <td>{comparison ? formatMetric(rows[key]?.reference) : "—"}</td>
+                  <td>{comparison ? formatDiff(rows[key]?.difference) : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="flashcard-foot text-muted small">
+            {comparison
+              ? <>Frente a {comparison.reference.label}{comparison.comparable ? "." : " (comparación orientativa)."}</>
+              : "No hay otro modelo activo para comparar."}
+            {" "}Conjunto de prueba: {version.metrics?.test_size ?? "—"} registros.
+          </p>
+          <div className="flashcard-actions">
+            {acceptance && (acceptance.passed
+              ? <span className="acceptance-pill ok"><CheckCircle2 size={14} aria-hidden="true" /> Cumple criterios</span>
+              : <span className="acceptance-pill bad"><XCircle size={14} aria-hidden="true" /> No cumple criterios</span>)}
+            <Button size="sm" variant="ghost" icon={RotateCw} onClick={() => setFlipped(true)}>Ver detalle</Button>
           </div>
-        </div>
-        <div className="row-actions">
-          {version.approval_status === "PENDIENTE" && (
-            <>
-              <Button size="sm" icon={ShieldCheck} disabled={busy || !acceptance?.passed} onClick={() => setConfirm("approve")}
-                title={acceptance?.passed ? undefined : "No cumple los criterios de aceptación"}>Aprobar</Button>
-              <Button size="sm" variant="secondary" icon={ThumbsDown} disabled={busy} onClick={() => setConfirm("reject")}>Rechazar</Button>
-            </>
-          )}
-          {version.approval_status === "APROBADO" && !version.active && (
-            <Button size="sm" icon={Power} disabled={busy} onClick={() => setConfirm("activate")}>Activar</Button>
-          )}
-        </div>
-      </header>
+          <div className="flashcard-actions">
+            {version.approval_status === "PENDIENTE" && (
+              <>
+                <Button size="sm" icon={ShieldCheck} disabled={busy || !acceptance?.passed} onClick={() => setConfirm("approve")}
+                  title={acceptance?.passed ? undefined : "No cumple los criterios de aceptación"}>Aprobar</Button>
+                <Button size="sm" variant="secondary" icon={ThumbsDown} disabled={busy} onClick={() => setConfirm("reject")}>Rechazar</Button>
+              </>
+            )}
+            {version.approval_status === "APROBADO" && !version.active && (
+              <Button size="sm" icon={Power} disabled={busy} onClick={() => setConfirm("activate")}>Activar</Button>
+            )}
+          </div>
+        </section>
 
-      <div className="metric-grid">
-        {METRICS.map(([key, label]) => (
-          <div key={key} className="mini-stat"><span>{label}</span><strong>{formatMetric(version.metrics?.[key])}</strong></div>
-        ))}
+        <section className="flashcard-face back" aria-hidden={!flipped} inert={flipped ? undefined : ""}>
+          <header className="flashcard-head">
+            <div>
+              <h3>{version.name}</h3>
+              <small className="text-muted">Detalle de la evaluación</small>
+            </div>
+            <Button size="sm" variant="ghost" icon={RotateCcw} onClick={() => setFlipped(false)}>Volver</Button>
+          </header>
+          {matrix && (
+            <table className="confusion-matrix compact" aria-label="Matriz de confusión del conjunto de prueba">
+              <thead><tr><th /><th scope="col">Pred. no deserta</th><th scope="col">Pred. deserta</th></tr></thead>
+              <tbody>
+                <tr><th scope="row">No desertó</th><td>{matrix.tn} <small>VN</small></td><td>{matrix.fp} <small>FP</small></td></tr>
+                <tr><th scope="row">Desertó</th><td>{matrix.fn} <small>FN</small></td><td>{matrix.tp} <small>VP</small></td></tr>
+              </tbody>
+            </table>
+          )}
+          {acceptance && (
+            <ul className="acceptance compact">
+              {acceptance.checks.map((check) => (
+                <li key={check.code}>
+                  {check.passed ? <CheckCircle2 size={15} className="text-ok" aria-label="Cumple" /> : <XCircle size={15} className="text-bad" aria-label="No cumple" />}
+                  <span>{check.label}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {comparison?.warnings?.length > 0 && (
+            <ul className="flashcard-warnings">{comparison.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+          )}
+          <p className="text-muted small">Umbral de clasificación {version.metrics?.threshold ?? "—"}. Métricas de prueba, no de entrenamiento.</p>
+        </section>
       </div>
-      <p className="text-muted small">
-        Métricas sobre el conjunto de <strong>prueba</strong> ({version.metrics?.test_size ?? "—"} registros, umbral de
-        clasificación {version.metrics?.threshold ?? "—"}). No son métricas de entrenamiento.
-      </p>
-      {version.metrics?.confusion_matrix && (
-        <table className="confusion-matrix" aria-label="Matriz de confusión del conjunto de prueba">
-          <thead><tr><th /><th scope="col">Predicho: no deserta</th><th scope="col">Predicho: deserta</th></tr></thead>
-          <tbody>
-            <tr><th scope="row">Real: no desertó</th><td>{version.metrics.confusion_matrix.tn} <small>VN</small></td><td>{version.metrics.confusion_matrix.fp} <small>FP</small></td></tr>
-            <tr><th scope="row">Real: desertó</th><td>{version.metrics.confusion_matrix.fn} <small>FN</small></td><td>{version.metrics.confusion_matrix.tp} <small>VP</small></td></tr>
-          </tbody>
-        </table>
-      )}
-
-      {acceptance && (
-        <div className="acceptance">
-          <h4>Criterios de aceptación {acceptance.passed ? <StatusBadge className="status-success" label="Cumple" /> : <StatusBadge className="status-danger" label="No cumple" />}</h4>
-          <ul>
-            {acceptance.checks.map((check) => (
-              <li key={check.code}>
-                {check.passed ? <CheckCircle2 size={16} className="text-ok" aria-label="Cumple" /> : <XCircle size={16} className="text-bad" aria-label="No cumple" />}
-                <span><strong>{check.label}.</strong> <span className="text-muted">{check.detail}</span></span>
-              </li>
-            ))}
-          </ul>
-          {!acceptance.metric_minimums_configured && (
-            <p className="text-muted small">No hay mínimos de rendimiento configurados (ML_ACCEPTANCE_MIN_*): el proyecto no define
-              umbrales aprobados, por lo que la decisión de aprobar corresponde al administrador según la comparación.</p>
-          )}
-        </div>
-      )}
-
-      {comparison && (
-        <div className="comparison">
-          <h4>Comparación con {comparison.reference.label} {comparison.reference.active && "(activa)"}</h4>
-          {comparison.warnings.map((warning) => <Alert key={warning} type="warning">{warning}</Alert>)}
-          <DataTable caption="Comparación de métricas" rowKey="metric"
-            columns={[
-              { key: "metric", header: "Métrica", render: (r) => METRICS.find(([k]) => k === r.metric)?.[1] || r.metric },
-              { key: "reference", header: "Versión de referencia", align: "right", render: (r) => formatMetric(r.reference) },
-              { key: "new", header: "Nueva versión", align: "right", render: (r) => formatMetric(r.new) },
-              { key: "difference", header: comparison.comparable ? "Diferencia" : "Diferencia (orientativa)", align: "right", render: (r) => formatDiff(r.difference) },
-            ]}
-            rows={comparison.rows} />
-        </div>
-      )}
 
       <ConfirmationModal
         open={Boolean(confirm)}
@@ -235,7 +254,7 @@ export default function TrainingRunDetail({ runId, onChanged }) {
         activate: () => trainingService.activate(version.id) }[action];
       const updated = await call();
       setVersions((current) => ({ ...current, [version.id]: updated }));
-      setMessage({ type: "success", text: { approve: "Versión aprobada. Aún no está activa.", reject: "Versión rechazada.",
+      setMessage({ type: "success", text: { approve: "Versión aprobada. Aún no está activa.", reject: "Versión rechazada y eliminada: los modelos rechazados no se guardan.",
         activate: `${updated.name} v${updated.version} es ahora el modelo activo.` }[action] });
       reload();
       onChanged?.();
@@ -266,7 +285,7 @@ export default function TrainingRunDetail({ runId, onChanged }) {
   return (
     <Card
       title={<>Entrenamiento #{run.id} <StatusBadge className={RUN_STATUS_CLASS[run.status]} label={run.status_display} /></>}
-      subtitle={`Solicitado por ${run.requested_by || "—"} el ${formatDateTime(run.created_at)} · ${run.dataset.filename} (${run.dataset.rows} registros${run.dataset.is_synthetic ? ", sintéticos" : ""}) · Métrica de selección: ${run.selection_metric}`}
+      subtitle={`Solicitado por ${run.requested_by || "—"} el ${formatDateTime(run.created_at)} · ${run.dataset.filename} (${run.dataset.rows} registros)`}
     >
       {error && <Alert type="warning">{error} Se reintentará automáticamente.</Alert>}
       {message && <Alert type={message.type} onClose={() => setMessage(null)}>{message.text}</Alert>}
@@ -282,13 +301,12 @@ export default function TrainingRunDetail({ runId, onChanged }) {
           <Alert type="success" title="Entrenamiento completado.">
             {run.stage_message} Duración: {elapsed(run.started_at, run.finished_at)}. Ninguna versión se activó automáticamente.
           </Alert>
-          {run.versions.map((item) => {
-            const version = { ...item, ...versions[item.id] };
-            return (
-              <VersionReview key={item.id} busy={busy} onAction={act} version={version} acceptance={version.acceptance}
+          <div className="flashcards">
+            {run.versions.map((item) => (
+              <ModelFlashcard key={item.id} busy={busy} onAction={act} version={{ ...item, ...versions[item.id] }}
                 comparison={run.comparisons?.[String(item.id)]} />
-            );
-          })}
+            ))}
+          </div>
         </>
       )}
       <details className="run-details">

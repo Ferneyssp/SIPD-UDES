@@ -64,8 +64,7 @@ def notify_predictions_completed(actor, period_code: str, total: int, program_id
     recipients = []
     for user in others.prefetch_related("programs"):
         scope = {p.pk for p in user.programs.all()}
-        unrestricted = user.role == Role.COORDINATOR and not scope
-        if unrestricted or program_ids is None and scope or program_ids is not None and scope & set(program_ids):
+        if user.role == Role.COORDINATOR and scope and (program_ids is None or scope & set(program_ids)):
             recipients.append(user)
     notify(recipients, NotificationType.PREDICTIONS_COMPLETED, f"Nuevas predicciones disponibles ({period_code})",
            "Hay estimaciones de riesgo actualizadas para estudiantes de sus programas.", link=link,

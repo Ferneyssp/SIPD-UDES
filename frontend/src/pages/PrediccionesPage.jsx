@@ -24,8 +24,12 @@ import { formatDate, formatDateTime, formatNumber, shortProgram } from "../utils
 const PAGE_SIZE = 15;
 const METRICS = [["accuracy", "Accuracy"], ["precision", "Precision"], ["recall", "Recall"], ["f1", "F1-score"], ["roc_auc", "ROC-AUC"]];
 
+const ALGORITHMS = [["logistic_regression", "Regresión Logística"], ["random_forest", "Random Forest"], ["xgboost", "XGBoost"]];
+
+/** Una fila por algoritmo con un selector de versión (sólo versiones guardadas, es decir, aprobadas). */
 function ModelsPanel({ isAdmin }) {
   const models = useApi(() => modelService.list(), [], { errorMessage: "Error al cargar los modelos." });
+  const [selected, setSelected] = useState({});
   const [message, setMessage] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -43,21 +47,39 @@ function ModelsPanel({ isAdmin }) {
     }
   };
 
-  const synthetic = models.data?.some((m) => m.is_synthetic);
+  // Por defecto se muestra la versión activa del algoritmo o, si no hay, la más reciente.
+  const rows = ALGORITHMS.map(([algorithm, name]) => {
+    const versions = (models.data || []).filter((m) => m.algorithm === algorithm)
+      .sort((x, y) => String(y.trained_at || "").localeCompare(String(x.trained_at || "")));
+    const current = versions.find((v) => String(v.id) === selected[algorithm]) || versions.find((v) => v.active) || versions[0];
+    return { id: algorithm, algorithm, name, versions, current };
+  }).filter((row) => row.versions.length);
+
   const columns = [
-    { key: "name", header: "Modelo", render: (m) => <><strong>{m.name}</strong><br /><small className="text-muted">v{m.version}</small></> },
+    { key: "name", header: "Modelo", render: (r) => <strong>{r.name}</strong> },
+    {
+      key: "version", header: "Versión",
+      render: (r) => (
+        <select className="filter-select version-select" aria-label={`Versión de ${r.name}`} value={String(r.current.id)}
+          onChange={(e) => setSelected((current) => ({ ...current, [r.algorithm]: e.target.value }))}>
+          {r.versions.map((v) => (
+            <option key={v.id} value={String(v.id)}>v{v.version} · {formatDate(v.trained_at)}{v.active ? " (activa)" : ""}</option>
+          ))}
+        </select>
+      ),
+    },
     ...METRICS.map(([key, label]) => ({
       key, header: label, align: "right",
-      render: (m) => (m.metrics?.[key] !== undefined ? m.metrics[key].toFixed(3).replace(".", ",") : "—"),
+      render: (r) => (r.current.metrics?.[key] !== undefined ? r.current.metrics[key].toFixed(3).replace(".", ",") : "—"),
     })),
-    { key: "threshold", header: "Umbral eval.", align: "right", render: (m) => m.metrics?.threshold ?? "—" },
-    { key: "data", header: "Datos", render: (m) => (m.is_synthetic ? <StatusBadge className="status-warning" label="Sintéticos" /> : <StatusBadge className="status-info" label="Institucionales" />) },
+    { key: "threshold", header: "Umbral eval.", align: "right", render: (r) => r.current.metrics?.threshold ?? "—" },
     {
       key: "active", header: "Estado", align: "right",
-      render: (m) => (m.active ? (
+      render: (r) => (r.current.active ? (
         <StatusBadge className="status-success" label="Activo" />
       ) : isAdmin ? (
-        <Button variant="link" size="sm" disabled={busy} onClick={() => act(() => modelService.activate(m.id), `${m.name} ahora es el modelo activo.`)}>Activar</Button>
+        <Button variant="link" size="sm" disabled={busy}
+          onClick={() => act(() => modelService.activate(r.current.id), `${r.name} v${r.current.version} ahora es el modelo activo.`)}>Activar</Button>
       ) : <span className="text-muted">Inactivo</span>),
     },
   ];
@@ -65,16 +87,13 @@ function ModelsPanel({ isAdmin }) {
   return (
     <Card
       title="Modelos disponibles y métricas de evaluación"
-      subtitle="Métricas calculadas sobre el conjunto de prueba durante el entrenamiento. En deserción se priorizan Recall, F1 y ROC-AUC sobre Accuracy."
+      subtitle="Elija la versión de cada algoritmo para ver sus métricas sobre el conjunto de prueba. Sólo se listan versiones aprobadas."
       actions={isAdmin && <Button variant="secondary" size="sm" icon={RefreshCw} loading={busy} onClick={() => act(modelService.sync, "Modelos sincronizados.")}>Sincronizar</Button>}
       padded={false}
     >
-      {synthetic && (
-        <div className="card-inner"><Alert type="warning">Las métricas de modelos entrenados con datos sintéticos sirven sólo para pruebas técnicas; no son resultados académicos reales.</Alert></div>
-      )}
       {message && <div className="card-inner"><Alert type={message.type} onClose={() => setMessage(null)}>{message.text}</Alert></div>}
-      <DataTable columns={columns} rows={models.data} loading={models.loading} error={models.error} onRetry={models.reload}
-        emptyTitle="No hay modelos registrados." emptyDescription="Entrene un modelo con ml/scripts/train.py y sincronice." caption="Modelos" />
+      <DataTable columns={columns} rows={rows} loading={models.loading} error={models.error} onRetry={models.reload}
+        emptyTitle="No hay modelos registrados." emptyDescription="Entrene y apruebe un modelo en Reentrenamiento." caption="Modelos" />
     </Card>
   );
 }

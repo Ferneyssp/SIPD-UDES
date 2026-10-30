@@ -24,10 +24,16 @@ import { getErrorMessage, getFieldErrors } from "../utils/errors";
 import { formatDate } from "../utils/format";
 
 const PAGE_SIZE = 10;
-const EMPTY_FORM = { username: "", email: "", first_name: "", last_name: "", role: ROLES.PROFESSOR, program_ids: [], can_manage_users: false, password: "" };
+const EMPTY_FORM = { username: "", email: "", first_name: "", last_name: "", role: ROLES.COORDINATOR, program_ids: [], can_manage_users: false, password: "" };
 
 function UserFormModal({ open, user, onClose, onSaved }) {
-  const { config, programs } = useConfig();
+  const { config, programs: allPrograms } = useConfig();
+  const { user: currentUser } = useAuth();
+  const isAdmin = currentUser.role === ROLES.ADMIN;
+  // Un coordinador gestor sólo crea coordinadores y sólo con sus propios programas (lo exige el backend).
+  const ownIds = new Set((currentUser.programs || []).map((p) => p.id));
+  const programs = isAdmin ? allPrograms : allPrograms.filter((p) => ownIds.has(p.id));
+  const roleOptions = (config?.roles || []).filter((r) => isAdmin || r.value !== ROLES.ADMIN);
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
   const [error, setError] = useState(null);
@@ -74,12 +80,12 @@ function UserFormModal({ open, user, onClose, onSaved }) {
         <Input label="Correo institucional" type="email" value={form.email} onChange={update("email")} required error={errors.email} />
         <Input label="Nombres" value={form.first_name} onChange={update("first_name")} />
         <Input label="Apellidos" value={form.last_name} onChange={update("last_name")} />
-        <Select label="Rol" value={form.role} onChange={update("role")} options={config?.roles || []} error={errors.role} />
+        <Select label="Rol" value={form.role} onChange={update("role")} options={roleOptions} error={errors.role} />
         <Input label={user ? "Nueva contraseña (opcional)" : "Contraseña"} type="password" autoComplete="new-password"
           value={form.password} onChange={update("password")} required={!user} error={errors.password}
           hint="Mínimo 8 caracteres; no puede ser sólo numérica ni muy común." />
         <fieldset className="span-2 fieldset">
-          <legend>Programas asignados {form.role === ROLES.COORDINATOR && <small className="text-muted">(vacío = acceso a todos)</small>}
+          <legend>Programas asignados {form.role === ROLES.COORDINATOR && <small className="text-muted">(sin programas no verá estudiantes)</small>}
             {form.role === ROLES.ADMIN && <small className="text-muted">(el administrador accede a todos)</small>}</legend>
           <div className="checkbox-grid">
             {programs.map((p) => (
@@ -90,7 +96,7 @@ function UserFormModal({ open, user, onClose, onSaved }) {
             ))}
           </div>
         </fieldset>
-        {form.role === ROLES.COORDINATOR && (
+        {form.role === ROLES.COORDINATOR && isAdmin && (
           <label className="checkbox span-2">
             <input type="checkbox" checked={form.can_manage_users} onChange={update("can_manage_users")} />
             <span>Otorgar permiso explícito para administrar usuarios</span>
@@ -142,7 +148,7 @@ export default function UsuariosPage() {
     { key: "username", header: "Usuario", render: (u) => <><strong>{u.username}</strong><br /><small className="text-muted">{[u.first_name, u.last_name].filter(Boolean).join(" ")}</small></> },
     { key: "email", header: "Correo" },
     { key: "role_display", header: "Rol" },
-    { key: "programs", header: "Programas", render: (u) => (u.role === ROLES.ADMIN ? "Todos" : u.programs.map((p) => p.code).join(", ") || (u.role === ROLES.COORDINATOR ? "Todos" : "Sin asignar")) },
+    { key: "programs", header: "Programas", render: (u) => (u.role === ROLES.ADMIN ? "Todos" : u.programs.map((p) => p.code).join(", ") || "Sin asignar") },
     { key: "is_active", header: "Estado", render: (u) => <StatusBadge className={u.is_active ? "status-success" : "status-muted"} label={u.is_active ? "Activo" : "Inactivo"} /> },
     { key: "created_at", header: "Fecha de creación", render: (u) => formatDate(u.created_at) },
     {

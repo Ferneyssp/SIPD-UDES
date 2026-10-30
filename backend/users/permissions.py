@@ -28,7 +28,7 @@ class IsAdminOrReadOnly(BasePermission):
 
 
 class CanRegisterFollowUp(BasePermission):
-    """Profesores, coordinadores y administradores pueden registrar seguimiento."""
+    """Coordinadores y administradores pueden registrar seguimiento."""
 
     message = "No tiene permiso para registrar seguimiento."
 

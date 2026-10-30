@@ -21,7 +21,7 @@ PROGRAMS = {
     "ELE": ("Ingeniería Electrónica", 0.05),
 }
 
-ACADEMIC_STATUSES = ["Activo", "Activo", "Activo", "Activo", "Prueba académica"]
+ACADEMIC_STATUSES = ["Activo"]
 
 
 def _with_missing(values: np.ndarray, rng: np.random.Generator, ratio: float) -> np.ndarray:
@@ -134,7 +134,7 @@ def simulate_student_trajectories(n_students: int, periods: list[str], seed: int
             credits_failed = int(min(failed_subjects * rng.integers(2, 5), credits_enrolled))
             attendance = float(np.clip(84 + 7 * ability + 12 * trend * step + rng.normal(0, 5), 40, 100))
             is_last = step == len(active_periods) - 1
-            status = "Prueba académica" if gpa < 3.0 else "Activo"
+            status = "Activo"
             if withdrawn_early and is_last:
                 status = "Retirado"
             rows.append({

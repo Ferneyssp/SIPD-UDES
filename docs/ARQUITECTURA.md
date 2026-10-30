@@ -38,15 +38,17 @@ Decisiones:
 
 | Entidad | Campos principales |
 |---|---|
-| `User` | username, email (único), password (hash), role (ADMIN/COORDINATOR/PROFESSOR), programs (M2M), can_manage_users, is_active, created_at, updated_at |
+| `User` | username, email (único), password (hash), role (ADMIN/COORDINATOR), programs (M2M), can_manage_users, is_active, password_changed_at, created_at, updated_at |
 | `Program` | code, name, is_active |
 | `AcademicPeriod` | code (AAAA-T), year, term, start_date, end_date, is_current |
 | `Student` | anonymous_code (E001), program, semester, academic_status, current_period, is_active, timestamps |
 | `AcademicRecord` | student, academic_period, semester, gpa, credits_enrolled/approved/failed, failed_subjects, attendance_percentage, course_repetitions, variables de encuesta (nullable), extra_survey_data (JSON), source_upload |
 | `ModelVersion` | name, algorithm, version, metrics (JSON), trained_at, active, artifact_dir, is_synthetic, selected, dataset_rows, evaluation (JSON: conjunto, partición, tamaños), artifact_checksums (SHA-256), training_run, approval_status (PENDIENTE/APROBADO/RECHAZADO/NO_REQUERIDA), acceptance (JSON), approved_by, approved_at, approval_notes |
-| `TrainingDataset` | source (CARGA/REFERENCIA), filename, content (bytes), checksum, size_bytes, rows, status (VALIDO/RECHAZADO), report (JSON), is_synthetic, uploaded_by, created_at |
+| `TrainingDataset` | source (CARGA/REFERENCIA), filename, content (bytes), checksum, size_bytes, rows, status (VALIDO; los rechazados no se guardan), report (JSON), is_synthetic, uploaded_by, created_at |
 | `TrainingRun` | dataset, requested_by, status (PENDIENTE…COMPLETADO/FALLIDO/CANCELADO), stage_message, events (JSON), algorithms, selection_metric, threshold, version, selected_algorithm, ranking, error_message, in_progress (restricción única parcial = una ejecución a la vez), created_at, started_at, finished_at, heartbeat_at |
 | `ModelActivationLog` | action (INICIAL/ACTIVACION/RECUPERACION), previous_version, new_version, etiquetas, performed_by, created_at |
+| `Alert` | student, academic_period (único juntos), prediction, reason (NIVEL_ALTO/AUMENTO/ALTO_Y_AUMENTO), priority, probability, previous_probability, status (ABIERTA/EN_ATENCION/CERRADA), assigned_to, closed_by, closing_observation, followup (seguimiento con el que se gestiona), created_at, updated_at, closed_at |
+| `AlertComment` | alert, author, text, created_at |
 | `Notification` | recipient, type, level, title, message, link (ruta interna), entity, entity_id, dedupe_key (único por destinatario), created_at, read_at |
 | `Prediction` | student, academic_record, academic_period, model_version, model_name, probability, risk_level, status (VIGENTE/REEMPLAZADA), input_features, explanation, prediction_date, created_by |
 | `FollowUp` | student, user (responsable), created_by, academic_period, intervention_type, status (PENDIENTE/EN_SEGUIMIENTO/ATENDIDO/CERRADO), observation, follow_up_date |
@@ -60,36 +62,40 @@ Paginación: `?page=&page_size=` (máx. 100).
 
 | Método | Ruta | Descripción | Rol |
 |---|---|---|---|
-| POST | `/api/auth/login/` | Usuario o correo + contraseña → access, refresh, user | Público |
-| POST | `/api/auth/refresh/` | Renueva tokens (rotación) | Público |
-| POST | `/api/auth/logout/` | Invalida el refresh token | Autenticado |
+| POST | `/api/auth/login/` | Usuario o correo + contraseña (+ `remember`) → `access` y `user`; el refresh token va en la cookie HttpOnly `sipd_refresh` | Público |
+| POST | `/api/auth/refresh/` | Renueva el access token con la cookie (rotación); exige `X-Requested-With: XMLHttpRequest` | Cookie |
+| POST | `/api/auth/logout/` | Invalida el refresh token de la cookie y la borra; exige `X-Requested-With` | Cookie |
 | GET | `/api/auth/me/` | Perfil | Autenticado |
+| POST | `/api/auth/password-reset/` | `{email}` → envía un enlace de recuperación (respuesta siempre igual; 5 solicitudes/hora) | Público |
+| POST | `/api/auth/password-reset/confirm/` | `{uid, token, new_password, confirm_password}` → cambia la contraseña y cierra las sesiones | Público (enlace de un solo uso, 30 min) |
 | POST | `/api/auth/change-password/` | Cambio de contraseña | Autenticado |
 | GET | `/api/config/` | Umbrales, catálogos, etiquetas de variables | Autenticado |
 | GET/POST/PATCH | `/api/users/` | Gestión de usuarios (DELETE = desactivar) | Admin |
 | GET | `/api/programs/`, `/api/periods/` | Catálogos | Autenticado |
-| GET | `/api/students/` | Filtros: `search, program, semester, academic_status, risk_level, period, followup_status, ordering=-current_probability` | Según ámbito |
-| GET | `/api/students/{id\|E001}/` | Detalle con historial académico | Según ámbito |
-| POST/PATCH/DELETE | `/api/students/` | Registro/edición/desactivación | Admin |
-| POST | `/api/students/{code}/records/` | Registro académico de un periodo | Admin |
+| GET | `/api/students/` | Sólo lectura. Filtros: `search, program, semester, academic_status, risk_level, period, followup_status, trend=up\|down, alert=open, ordering=-current_probability (defecto)\|-risk_change\|anonymous_code`. Incluye `risk_change_points` y `open_alert_status` | Según ámbito |
+| GET | `/api/students/{id\|E001}/` | Detalle con historial académico; cada consulta se registra (`STUDENT_VIEWED`) | Según ámbito |
+| GET | `/api/students/export/` | CSV del listado con los mismos filtros | Según ámbito |
+| GET | `/api/alerts/` | `status=pending (defecto en la interfaz)\|ABIERTA\|EN_ATENCION\|CERRADA\|all, priority, reason, program, period, student, assigned=me\|none` | Admin, Coordinador (ámbito) |
+| GET | `/api/alerts/{id}/` · `/api/alerts/summary/` | Detalle con comentarios · conteos y recientes | Admin, Coordinador (ámbito) |
+| — | (sin acciones propias) | Las alertas se gestionan con `POST/PATCH /api/followups/`: registrar el seguimiento las pone *En atención*; marcarlo ATENDIDO o CERRADO las cierra con su observación | Admin, Coordinador (ámbito) |
 | GET | `/api/predictions/` | Filtros: `period, program, risk_level, model, date_from, date_to, student, status` | Según ámbito |
 | GET | `/api/predictions/{id}/` | Incluye variables de entrada y explicación | Según ámbito |
 | POST | `/api/predictions/` | `{student, academic_period?}` → predicción | Admin |
 | POST | `/api/predictions/run-batch/` | `{academic_period, program?}` | Admin |
 | GET | `/api/predictions/history/?student=E001` | Evolución temporal | Según ámbito |
 | GET | `/api/predictions/trend/` | % por nivel en cada periodo | Según ámbito |
-| GET | `/api/predictions/summary/` | Datos de **Inicio** | Según ámbito |
+| GET | `/api/predictions/summary/` | Datos de **Inicio**; `risk_level` filtra tarjetas, gráficos y tabla | Según ámbito |
 | GET | `/api/models/` · POST `/api/models/{id}/activate/` · POST `/api/models/sync/` | Versiones de modelos | Lectura: todos · Escritura: Admin |
 | GET/POST | `/api/uploads/` | Validar CSV (multipart `file`) / historial | Admin |
 | POST | `/api/uploads/{id}/confirm/` | Procesar registros válidos | Admin |
+| POST | `/api/uploads/{id}/discard/` | Descartar una carga validada no confirmada (las rechazadas nunca se guardan) | Admin |
 | GET | `/api/uploads/template/` | Plantilla CSV | Admin |
-| GET/POST/PATCH | `/api/followups/` | Seguimiento (sin eliminación) | Todos (ámbito) |
-| GET | `/api/followups/responsibles/` | Posibles responsables | Todos |
-| GET | `/api/audit/` | Auditoría | Admin |
+| GET/POST/PATCH | `/api/followups/` | Seguimiento (sin eliminación); `latest=true` devuelve sólo el último de cada estudiante | Todos (ámbito) |
+| GET | `/api/followups/responsibles/?student=E001` | Coordinadores con acceso al programa del estudiante (nunca administradores) | Todos (ámbito) |
 | GET | `/api/training/overview/` | Estado de modelos, configuración, ejecución en curso | Admin |
-| POST | `/api/training/datasets/` | Validar dataset (multipart `file` o `{"source": "reference"}`) → 201 / 422 | Admin |
+| POST | `/api/training/datasets/` | Validar dataset (multipart `file`) → 201 / 422 | Admin |
 | GET | `/api/training/datasets/{id}/` | Informe de validación | Admin |
-| GET/POST | `/api/training/runs/` | Historial (`status, algorithm, date_from, date_to`) / iniciar `{dataset, algorithms, selection_metric, confirm: true}` → 202, 409 si hay otra en curso, 503 si está desactivado | Admin |
+| GET/POST | `/api/training/runs/` | Historial (`status, algorithm, date_from, date_to`) / iniciar `{dataset, algorithms, confirm: true}` (`selection_metric` opcional, `f1` por defecto) → 202, 409 si hay otra en curso, 503 si está desactivado | Admin |
 | GET | `/api/training/runs/{id}/` · `/api/training/runs/active/` | Estado real, etapas, versiones, comparaciones | Admin |
 | POST | `/api/training/runs/{id}/cancel/` | Cancelar (sólo PENDIENTE) | Admin |
 | POST | `/api/models/{id}/approve/` · `/reject/` | Revisión `{notes}`; aprobar exige criterios de aceptación | Admin |
@@ -100,8 +106,6 @@ Paginación: `?page=&page_size=` (máx. 100).
 | POST | `/api/notifications/{id}/read/` · `/api/notifications/read-all/` | Marcar leída(s) | Autenticado |
 | GET | `/api/reports/risk/` (+ `csv/`, `pdf/`) | Riesgo agregado: `period, program, semester, date_from, date_to` | Todos (ámbito) |
 | GET | `/api/reports/risk/students/csv/` | Listado individual seudonimizado | Admin |
-| GET | `/api/reports/models/` (+ `csv/`, `pdf/`) | Evaluación de modelos: `algorithm` | Todos |
-| GET | `/api/reports/activity/` (+ `csv/`, `pdf/`) | Actividad administrativa: `date_from, date_to` | Admin |
 
 Errores: 400 validación, 401 sin sesión, 403 permisos, 404 inexistente, 409 conflicto de estado (entrenamiento en
 curso, versión no aprobada, artefactos alterados…), 422 archivo rechazado, 503 función no disponible. Nunca se
@@ -159,7 +163,7 @@ Ejemplo de respuesta de `POST /api/predictions/`:
 ### Flujo
 
 ```
-Admin ─ CSV ─▶ POST /training/datasets/ ─▶ validate_training_dataset ─▶ TrainingDataset (VALIDO/RECHAZADO)
+Admin ─ CSV ─▶ POST /training/datasets/ ─▶ validate_training_dataset ─▶ TrainingDataset (sólo si es VALIDO)
       ─ confirmar ─▶ POST /training/runs/ ─▶ TrainingRun(PENDIENTE, in_progress=True) ─▶ hilo / worker
                          execute_run: VALIDANDO → PREPARANDO → ENTRENANDO → EVALUANDO → REGISTRANDO
                          run_training_pipeline(publish_default=False) → carpetas <algoritmo>_<versión>/

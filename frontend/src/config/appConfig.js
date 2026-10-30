@@ -6,7 +6,6 @@ export const SYSTEM_DESCRIPTION = "Sistema de Predicción y Seguimiento del Ries
 export const ROLES = {
   ADMIN: "ADMIN",
   COORDINATOR: "COORDINATOR",
-  PROFESSOR: "PROFESSOR",
 };
 
 export const PREDICTION_DISCLAIMER =

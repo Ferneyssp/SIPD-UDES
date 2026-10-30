@@ -6,12 +6,12 @@ import Card from "../components/Card";
 import DataTable from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import ErrorMessage from "../components/ErrorMessage";
-import Filter from "../components/Filter";
 import Input from "../components/Input";
 import Loading from "../components/Loading";
 import PageHeader from "../components/PageHeader";
 import RiskBadge, { RiskBar } from "../components/RiskBadge";
-import { InstitutionalTrendChart, RiskTimelineChart } from "../components/RiskCharts";
+import FollowUpHistory from "../components/FollowUpHistory";
+import { RiskTimelineChart } from "../components/RiskCharts";
 import StatusBadge from "../components/StatusBadge";
 import { useConfig } from "../context/ConfigContext";
 import { useApi } from "../hooks/useApi";
@@ -19,18 +19,16 @@ import { predictionService } from "../services/api";
 import { formatDateTime } from "../utils/format";
 
 export default function HistorialPage() {
-  const { config, programs } = useConfig();
+  const { config } = useConfig();
   const [searchParams, setSearchParams] = useSearchParams();
   const student = (searchParams.get("student") || "").toUpperCase();
   const includeSuperseded = searchParams.get("all") === "1";
   const [code, setCode] = useState(student);
-  const [program, setProgram] = useState("");
 
   const history = useApi(() => predictionService.history(student, includeSuperseded), [student, includeSuperseded], {
     enabled: Boolean(student),
     errorMessage: "No se pudo consultar el historial del estudiante.",
   });
-  const trend = useApi(() => predictionService.trend({ program }), [program], { errorMessage: "Error al cargar la evolución institucional." });
 
   const submit = (event) => {
     event.preventDefault();
@@ -50,7 +48,7 @@ export default function HistorialPage() {
 
   return (
     <>
-      <PageHeader title="Historial de predicciones" description="Las predicciones nunca se sobrescriben: cada ejecución queda registrada." />
+      <PageHeader title="Historial" description="Evolución del riesgo estimado y seguimiento de cada estudiante. Las predicciones y las intervenciones nunca se sobrescriben." />
 
       <Card title="Consultar estudiante">
         <form className="inline-form" onSubmit={submit}>
@@ -92,18 +90,15 @@ export default function HistorialPage() {
               </Card>
             </div>
           )}
+          {history.data && <FollowUpHistory studentCode={history.data.student.anonymous_code} />}
         </>
       )}
 
-      <Card
-        title="Evolución institucional por periodo"
-        subtitle="Porcentaje de estudiantes en cada nivel de riesgo estimado (predicciones vigentes)"
-        actions={<Filter label="Programa" value={program} onChange={setProgram} options={programs.map((p) => ({ value: p.code, label: p.name }))} />}
-      >
-        {trend.error && <ErrorMessage message={trend.error} onRetry={trend.reload} />}
-        {trend.loading && !trend.data && <Loading />}
-        {trend.data && (trend.data.length ? <InstitutionalTrendChart rows={trend.data} /> : <EmptyState title="No hay información disponible." />)}
-      </Card>
+      {!student && (
+        <Card>
+          <EmptyState title="Consulte un estudiante por su código." description="Verá la evolución de su riesgo estimado y su historial de seguimiento." />
+        </Card>
+      )}
     </>
   );
 }

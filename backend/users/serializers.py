@@ -41,6 +41,7 @@ class UserSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        self._check_privileges(attrs)
         if self.instance is None and not attrs.get("password"):
             raise serializers.ValidationError({"password": "La contraseña es obligatoria al crear un usuario."})
         if attrs.get("password"):
@@ -50,6 +51,33 @@ class UserSerializer(serializers.ModelSerializer):
         if role != Role.COORDINATOR:
             attrs["can_manage_users"] = False
         return attrs
+
+    def _check_privileges(self, attrs):
+        """Impide la escalada de privilegios: sólo un Administrador puede crear o editar administradores,
+        asignar el rol Administrador o el permiso de gestionar usuarios; nadie cambia su propio rol ni sus
+        permisos; un coordinador gestor sólo asigna programas que él mismo tiene."""
+        request = self.context.get("request")
+        actor = getattr(request, "user", None)
+        if actor is None:
+            return
+        errors = {}
+        if self.instance is not None and self.instance.pk == actor.pk:
+            for field in ("role", "can_manage_users", "is_active"):
+                if field in attrs and attrs[field] != getattr(self.instance, field):
+                    errors[field] = "No puede modificar su propio rol, permisos ni estado."
+        if actor.role != Role.ADMIN:
+            if attrs.get("role") == Role.ADMIN or (self.instance is not None and self.instance.role == Role.ADMIN):
+                errors["role"] = "Sólo un Administrador puede crear o modificar administradores."
+            if attrs.get("can_manage_users"):
+                errors["can_manage_users"] = "Sólo un Administrador puede otorgar el permiso de gestionar usuarios."
+            own = set(actor.programs.values_list("id", flat=True))
+            requested = {p.pk for p in attrs.get("programs", [])}
+            if requested - own:
+                errors["program_ids"] = "Sólo puede asignar programas que usted coordina."
+            if self.instance is None and attrs.get("role", Role.COORDINATOR) == Role.COORDINATOR and not requested:
+                errors["program_ids"] = "Asigne al menos uno de sus programas."
+        if errors:
+            raise serializers.ValidationError(errors)
 
     def create(self, validated_data):
         programs = validated_data.pop("programs", [])

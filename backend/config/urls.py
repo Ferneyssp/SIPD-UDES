@@ -1,17 +1,17 @@
 from django.contrib import admin
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import TokenRefreshView
 
+from alerts.views import AlertViewSet
 from academic.views import AcademicPeriodViewSet, ProgramViewSet
-from audit.views import AuditLogViewSet
 from followups.views import FollowUpViewSet, ResponsibleUsersView
 from ml.views import ModelVersionViewSet, TrainingDatasetViewSet, TrainingOverviewView, TrainingRunViewSet
 from notifications.views import NotificationViewSet
 from predictions.views import PredictionViewSet
 from students.views import StudentViewSet
 from uploads.views import DataUploadViewSet
-from users.views import ChangePasswordView, LoginView, LogoutView, MeView, UserViewSet
+from users.password_reset import PasswordResetConfirmView, PasswordResetRequestView
+from users.views import ChangePasswordView, CookieTokenRefreshView, LoginView, LogoutView, MeView, UserViewSet
 
 from .views import HealthView, SystemConfigView
 
@@ -24,17 +24,19 @@ router.register("predictions", PredictionViewSet, basename="prediction")
 router.register("models", ModelVersionViewSet, basename="model-version")
 router.register("uploads", DataUploadViewSet, basename="upload")
 router.register("followups", FollowUpViewSet, basename="followup")
-router.register("audit", AuditLogViewSet, basename="audit")
 router.register("training/datasets", TrainingDatasetViewSet, basename="training-dataset")
 router.register("training/runs", TrainingRunViewSet, basename="training-run")
 router.register("notifications", NotificationViewSet, basename="notification")
+router.register("alerts", AlertViewSet, basename="alert")
 
 auth_patterns = [
     path("login/", LoginView.as_view(), name="login"),
-    path("refresh/", TokenRefreshView.as_view(), name="token-refresh"),
+    path("refresh/", CookieTokenRefreshView.as_view(), name="token-refresh"),
     path("logout/", LogoutView.as_view(), name="logout"),
     path("me/", MeView.as_view(), name="me"),
     path("change-password/", ChangePasswordView.as_view(), name="change-password"),
+    path("password-reset/", PasswordResetRequestView.as_view(), name="password-reset"),
+    path("password-reset/confirm/", PasswordResetConfirmView.as_view(), name="password-reset-confirm"),
 ]
 
 urlpatterns = [

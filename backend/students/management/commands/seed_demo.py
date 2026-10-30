@@ -9,6 +9,7 @@ códigos E001, E002, ... y los usuarios son cuentas de prueba.
 """
 import os
 import random
+import secrets
 from datetime import date, datetime, time
 
 from django.core.management import call_command
@@ -40,9 +41,8 @@ PERIODS = [
 DEMO_USERS = [
     # username, email, nombre, apellido, rol, programas
     ("admin", "admin@sipd.demo", "Administrador", "Demo", Role.ADMIN, []),
-    ("coordinador", "coordinador@sipd.demo", "Coordinación", "Académica", Role.COORDINATOR, []),
-    ("profesor", "profesor@sipd.demo", "Docente", "Sistemas", Role.PROFESSOR, ["SIS", "SOF"]),
-    ("profesor2", "profesor2@sipd.demo", "Docente", "Civil", Role.PROFESSOR, ["CIV", "IND"]),
+    ("coordinador", "coordinador@sipd.demo", "Coordinación", "Sistemas", Role.COORDINATOR, ["SIS", "SOF"]),
+    ("coordinador2", "coordinador2@sipd.demo", "Coordinación", "Civil", Role.COORDINATOR, ["CIV", "IND", "ELE"]),
 ]
 OBSERVATIONS = [
     "Se programó plan de estudio con tutor asignado para reforzar asignaturas básicas.",
@@ -65,7 +65,11 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         from sipd_ml.synthetic import simulate_student_trajectories
 
-        password = os.environ.get("DEMO_PASSWORD") or "SipdDemo2026*"
+        # Nunca una contraseña fija: sin DEMO_PASSWORD se genera una aleatoria y se muestra una sola vez.
+        password = os.environ.get("DEMO_PASSWORD")
+        generated = not password
+        if generated:
+            password = secrets.token_urlsafe(12) + "#9"
         random.seed(options["seed"])
 
         with transaction.atomic():
@@ -88,8 +92,9 @@ class Command(BaseCommand):
                 )
                 if created:
                     user.set_password(password)
+                    # Acceso a /admin sí, superusuario no: los permisos los da el rol de SIPD.
                     user.is_staff = role == Role.ADMIN
-                    user.is_superuser = role == Role.ADMIN
+                    user.is_superuser = False
                     user.save()
                 user.programs.set([programs[c] for c in program_codes])
                 users[username] = user
@@ -130,14 +135,21 @@ class Command(BaseCommand):
         self._create_followups(users, periods[PERIODS[-1][0]])
         call_command("check")
         self.stdout.write(self.style.SUCCESS("\nDatos de demostración creados (SINTÉTICOS)."))
-        self.stdout.write("Usuarios de prueba (contraseña definida en DEMO_PASSWORD o valor por defecto de desarrollo):")
+        self.stdout.write("Usuarios de prueba (sólo los creados en esta ejecución reciben la contraseña):")
         for username, *_rest in DEMO_USERS:
             self.stdout.write(f"  - {username}")
+        if generated:
+            self.stdout.write(self.style.WARNING(
+                f"DEMO_PASSWORD no está definida: contraseña aleatoria generada (no se volverá a mostrar): {password}"))
 
     def _create_followups(self, users, period):
         if FollowUp.objects.exists():
             return
-        responsibles = [users["coordinador"], users["profesor"], users["profesor2"]]
+        # El responsable de cada seguimiento es el coordinador del programa del estudiante.
+        by_program = {}
+        for user in users.values():
+            for program in user.programs.all():
+                by_program[program.pk] = user
         high_risk = (
             Prediction.objects.filter(academic_period=period, status=PredictionStatus.CURRENT, risk_level="ALTO")
             .select_related("student").order_by("-probability")[:45]
@@ -147,7 +159,9 @@ class Command(BaseCommand):
         for index, prediction in enumerate(high_risk):
             if index % 3 == 2:
                 continue  # algunos estudiantes quedan sin seguimiento
-            responsible = responsibles[index % len(responsibles)]
+            responsible = by_program.get(prediction.student.program_id)
+            if responsible is None:
+                continue  # el Administrador nunca es responsable
             FollowUp.objects.create(
                 student=prediction.student, user=responsible, created_by=responsible, academic_period=period,
                 intervention_type=types[index % len(types)], status=statuses[index % len(statuses)],

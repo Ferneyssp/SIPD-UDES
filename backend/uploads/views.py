@@ -62,8 +62,7 @@ class DataUploadViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins
                                                                   "valid": upload.records_valid, "failed": upload.records_failed})
         if upload.status != "VALIDADO":
             notify([request.user], NotificationType.UPLOAD_REJECTED, f"Archivo rechazado: {upload.filename}", upload.message,
-                   level=NotificationLevel.WARNING, link="/carga-datos", entity="DataUpload", entity_id=upload.pk,
-                   dedupe_key=f"upload-{upload.pk}-rejected")
+                   level=NotificationLevel.WARNING, link="/carga-datos", entity="DataUpload")
         code = status.HTTP_201_CREATED if upload.status == "VALIDADO" else status.HTTP_422_UNPROCESSABLE_ENTITY
         return Response(DataUploadSerializer(upload).data, status=code)
 
@@ -83,6 +82,17 @@ class DataUploadViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins
                                      list(upload.academic_records.values_list("student__program_id", flat=True).distinct()),
                                      origin=f" a partir de la carga {upload.filename}")
         return Response(DataUploadSerializer(upload).data)
+
+    @action(detail=True, methods=["post"])
+    def discard(self, request, pk=None):
+        """Descarta una carga validada que no se confirmó ("Cancelar / nueva carga"): no se conserva."""
+        upload = self.get_object()
+        if upload.status != "VALIDADO":
+            return Response({"detail": "Sólo puede descartarse una carga validada que aún no se ha confirmado."},
+                            status=status.HTTP_409_CONFLICT)
+        upload.file.delete(save=False)
+        upload.delete()
+        return Response({"detail": "Carga descartada."})
 
     @action(detail=False, methods=["get"])
     def template(self, request):

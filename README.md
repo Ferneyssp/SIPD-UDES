@@ -1,7 +1,7 @@
 # SIPD — Sistema de Predicción y Seguimiento del Riesgo de Deserción Estudiantil
 
 MVP académico (proyecto de grado) que estima el **riesgo de deserción** de estudiantes mediante modelos de
-Machine Learning y apoya el **seguimiento** por parte de profesores, coordinadores y administradores.
+Machine Learning y apoya el **seguimiento** por parte de coordinadores académicos y administradores.
 
 > El sistema presenta **estimaciones probabilísticas** ("riesgo estimado", "nivel de riesgo",
 > "estudiante identificado para seguimiento"). **Nunca** afirma que un estudiante vaya a desertar.
@@ -15,9 +15,10 @@ Frontend (React + Vite) ──REST/JWT──▶ Backend (Django + DRF) ──▶
       Entrenamiento: offline (ml/scripts, notebooks) o desde la web (Admin, en segundo plano)
 ```
 
-Módulos: **Inicio** · Estudiantes · Predicciones · Historial · Seguimiento · **Reportes** · Carga de datos (Admin) ·
-**Reentrenamiento** (Admin) · Usuarios (Admin) · **Notificaciones** · Perfil · Cerrar sesión. **No existe** módulo
-"Dashboard" ni "Estadísticas": el resumen vive en **Inicio**.
+Menú agrupado por tarea: **Analizar** (Inicio · Estudiantes · Predicciones (Admin) · Historial · Reportes) ·
+**Atender** (Alertas · Seguimiento) · **Administrar** (Carga de datos · Reentrenamiento · Usuarios; Admin) ·
+**Cuenta** (Notificaciones · Perfil). **No existe** módulo "Dashboard" ni "Estadísticas": el resumen vive en **Inicio**.
+Ver [§21](#21-referencia-civitas-learning-y-cambios-de-la-versión) para la relación con *Institutional Impact Platform*.
 
 ---
 
@@ -43,6 +44,8 @@ Módulos: **Inicio** · Estudiantes · Predicciones · Historial · Seguimiento 
 18. [Reentrenamiento desde la web](#18-reentrenamiento-desde-la-web)
 19. [Notificaciones](#19-notificaciones)
 20. [Reportes y exportación](#20-reportes-y-exportación)
+21. [Referencia Civitas Learning y cambios de la versión](#21-referencia-civitas-learning-y-cambios-de-la-versión)
+22. [Recuperación de contraseña por correo (Gmail)](#22-recuperación-de-contraseña-por-correo-gmail)
 
 ---
 
@@ -99,13 +102,16 @@ python -c "import secrets; print(secrets.token_urlsafe(50))"   # genera SECRET_K
 | `JWT_ACCESS_TOKEN_LIFETIME`, `JWT_REFRESH_TOKEN_LIFETIME` | Vigencia de tokens (minutos) |
 | `CORS_ALLOWED_ORIGINS` | Orígenes permitidos del frontend |
 | `RISK_LOW_THRESHOLD`, `RISK_MEDIUM_THRESHOLD` | **Umbrales de riesgo** (0.30 / 0.60 por defecto) |
+| `ALERT_RISE_THRESHOLD` | Aumento de probabilidad que genera alerta temprana (0.15 = 15 puntos; parámetro de diseño, no validado) |
+| `SECURE_COOKIES` | Cookies `Secure` (por defecto activas si `DEBUG=False`) |
+| `SECURE_SSL_REDIRECT`, `SECURE_HSTS_SECONDS`, `SECURE_HSTS_INCLUDE_SUBDOMAINS`, `SECURE_HSTS_PRELOAD` | HTTPS obligatorio y HSTS en producción (por defecto: redirección activa y HSTS de 1 año si `DEBUG=False`) |
+| `TRUSTED_PROXY_COUNT` | Proxies inversos de confianza: sólo entonces se usa `X-Forwarded-For` para la IP (0 por defecto; 1 en Vercel y en Docker con Nginx) |
 | `GPA_MIN`, `GPA_MAX` | Escala de promedio institucional (0–5) |
 | `UPLOAD_MAX_BYTES`, `UPLOAD_MAX_ROWS` | Límites de carga CSV |
 | `ML_MODELS_DIR` | Carpeta de modelos (por defecto `backend/ml_models`) |
 | `ML_TRAINING_EXECUTOR` | Reentrenamiento web: `thread` (defecto), `worker` o `disabled` (defecto en Vercel). Ver [§18](#18-reentrenamiento-desde-la-web) |
 | `ML_TRAINING_STALE_MINUTES` | Minutos sin latido para dar por interrumpida una ejecución (10) |
 | `ML_TRAINING_MIN_ROWS`, `ML_TRAINING_MIN_CLASS_ROWS` | Mínimos técnicos del dataset de entrenamiento (100 / 10 por clase) |
-| `ML_REFERENCE_DATASET` | Dataset de referencia **sintético** ofrecido en la interfaz |
 | `ML_ACCEPTANCE_MIN_F1`, `_RECALL`, `_PRECISION`, `_ROC_AUC` | Mínimos **opcionales** de aceptación (vacíos = sin mínimo) |
 | `INSTITUTION_NAME` | Nombre institucional de los PDF |
 | `REPORT_EXPORT_MAX_ROWS` | Límite de filas por exportación CSV (50000) |
@@ -143,13 +149,13 @@ python manage.py seed_demo              # --students 400 --reset para regenerar
 
 | Usuario | Rol | Ámbito |
 |---|---|---|
-| `admin` | Administrador | Todo |
-| `coordinador` | Coordinador académico | Todos los programas |
-| `profesor` | Profesor | Ing. de Sistemas, Ing. de Software |
-| `profesor2` | Profesor | Ing. Civil, Ing. Industrial |
+| `admin` | Administrador | Todos los estudiantes |
+| `coordinador` | Coordinador académico | Ing. de Sistemas, Ing. de Software |
+| `coordinador2` | Coordinador académico | Ing. Civil, Ing. Industrial, Ing. Electrónica |
 
-La contraseña es el valor de `DEMO_PASSWORD` (en desarrollo, si está vacía, se usa `SipdDemo2026*`).
-**No use estas cuentas en un entorno real.**
+La contraseña es el valor de `DEMO_PASSWORD`. **No existe una contraseña por defecto**: si la variable está vacía,
+`seed_demo` genera una aleatoria y la muestra **una sola vez** en la salida del comando. El usuario `admin` tiene
+acceso a `/admin` (`is_staff`) pero no es superusuario. **No use estas cuentas en un entorno real.**
 
 ## 7. Ejecución del backend
 
@@ -241,7 +247,9 @@ modelo se retroalimente con sus propias salidas.
 
 Menú **Carga de datos** (Administrador): 1) seleccionar CSV, 2) validar, 3) revisar resumen y errores,
 4) confirmar (opcionalmente generando predicciones). La validación **no modifica** datos; las filas con
-errores **nunca** se cargan en silencio y se reportan con fila, columna y motivo.
+errores **nunca** se cargan en silencio y se reportan con fila, columna y motivo. **Sólo se guardan las cargas
+validadas y procesadas**: un archivo rechazado muestra su informe pero no se conserva, y una carga validada que se
+cancela ("Cancelar / nueva carga") se descarta. Lo mismo aplica a los datasets de entrenamiento rechazados.
 
 - Plantilla: botón *Descargar plantilla* o `GET /api/uploads/template/`.
 - Ejemplos sintéticos: `data/sample/carga_ejemplo_valida.csv` y `data/sample/carga_ejemplo_con_errores.csv`
@@ -256,9 +264,9 @@ errores **nunca** se cargan en silencio y se reportan con fila, columna y motivo
 ## 12. Pruebas
 
 ```bash
-cd backend && python manage.py test        # 89 pruebas (PostgreSQL con permiso CREATEDB)
+cd backend && python manage.py test        # 110 pruebas (PostgreSQL con permiso CREATEDB)
 cd ml && python -m pytest                  # 7 pruebas del pipeline ML
-cd frontend && npm test                    # 30 pruebas (Vitest + Testing Library)
+cd frontend && npm test                    # 39 pruebas (Vitest + Testing Library)
 ```
 
 Sin PostgreSQL local, la batería del backend también corre con SQLite (así se verificó esta versión):
@@ -281,7 +289,10 @@ docker compose up --build
 - Aplicación: <http://localhost:5173> · API: <http://localhost:8000/api/>
 - Servicios: `postgres`, `backend` (Gunicorn), `frontend` (Nginx con proxy `/api`).
 - Al iniciar, el backend espera a PostgreSQL, migra, entrena el modelo si no existe, sincroniza versiones y,
-  con `SEED_DEMO=true`, carga los datos sintéticos si la base está vacía.
+  sólo con `SEED_DEMO=true` (por defecto `false`), carga los datos sintéticos si la base está vacía.
+- Docker local se sirve por http: `docker-compose.yml` desactiva la redirección HTTPS y HSTS, declara a Nginx como
+  único proxy de confianza (`TRUSTED_PROXY_COUNT=1`) y publica el puerto 8000 sólo en `127.0.0.1`. En un servidor
+  real detrás de HTTPS, elimine `SECURE_SSL_REDIRECT` y `SECURE_HSTS_SECONDS` del archivo.
 - No se añadió un servicio separado de ML: la inferencia es liviana y se ejecuta dentro del backend. El
   reentrenamiento web corre en un hilo en segundo plano del backend y guarda las versiones en el volumen
   `ml_models` (persisten entre reinicios y reconstrucciones).
@@ -302,7 +313,7 @@ docker compose up --build
 │   ├── ml_models/      artefactos .joblib + metadata.json
 │   ├── uploads/        carga y validación CSV
 │   ├── followups/      seguimiento / intervenciones
-│   └── audit/          auditoría de acciones
+│   └── audit/          registro interno de acciones (sin pantalla ni API)
 ├── frontend/           React + Vite
 │   └── src/{components,pages,layouts,services,hooks,context,utils,config,styles,test}
 ├── ml/                 entrenamiento offline (importa backend/sipd_ml)
@@ -318,26 +329,49 @@ Detalles de arquitectura, modelo de datos y API: [`docs/ARQUITECTURA.md`](docs/A
 
 ## 15. Roles y permisos
 
-| Acción | Administrador | Coordinador | Profesor |
-|---|:-:|:-:|:-:|
-| Inicio, estudiantes, predicciones, historial | ✅ | ✅ (sus programas; todos si no tiene asignados) | ✅ (sólo sus programas) |
-| Registrar / editar seguimiento | ✅ | ✅ | ✅ (los propios) |
-| Registrar / editar estudiantes | ✅ | — | — |
-| Ejecutar predicciones, activar modelos | ✅ | — | — |
-| Reentrenar, aprobar, activar y recuperar modelos | ✅ | — | — |
-| Reportes agregados de riesgo y de evaluación de modelos | ✅ | ✅ (su ámbito) | ✅ (su ámbito) |
-| Listado individual de riesgo (CSV) y reporte de actividad | ✅ | — | — |
-| Notificaciones | ✅ propias | ✅ propias | ✅ propias |
-| Carga de datos | ✅ | — | — |
-| Gestión de usuarios | ✅ | Sólo con permiso explícito | — |
+Dos roles (el rol Profesor se eliminó; la migración `users.0002` convirtió a esos usuarios en coordinadores con
+los mismos programas):
 
-Los usuarios no se eliminan físicamente: se desactivan para conservar la trazabilidad.
+| Acción | Administrador | Coordinador académico |
+|---|:-:|:-:|
+| Inicio, estudiantes, historial, ficha | ✅ todos los estudiantes | ✅ sólo los de sus programas asignados (sin programas: ninguno) |
+| Módulo Predicciones | ✅ | — |
+| Alertas tempranas (consulta) y su gestión mediante el seguimiento | ✅ | ✅ (sus programas) |
+| Registrar / editar seguimiento | ✅ (eligiendo un coordinador como responsable) | ✅ (sus programas) |
+| Ser responsable de un seguimiento o alerta | — nunca | ✅ (coordinador del programa del estudiante) |
+| Editar datos de estudiantes | — (sólo con la carga CSV) | — |
+| Ejecutar predicciones, activar modelos, reentrenar | ✅ | — |
+| Reportes agregados y exportación del listado (CSV) | ✅ | ✅ (su ámbito) |
+| Listado individual de riesgo (CSV) | ✅ | — |
+| Carga de datos | ✅ | — |
+| Gestión de usuarios | ✅ | Sólo con permiso explícito y limitada (ver abajo) |
+
+**Gestión de usuarios sin escalada de privilegios.** Sólo un Administrador crea o modifica administradores,
+asigna el rol Administrador o el permiso de gestionar usuarios y restablece contraseñas de administradores. Nadie
+cambia su propio rol, permisos ni estado. Un coordinador con permiso de gestión sólo ve y modifica coordinadores
+sin ese permiso cuyos programas estén dentro de los suyos, y sólo asigna sus propios programas.
+
+**Ficha de sólo lectura.** Los datos de los estudiantes no se editan desde la interfaz ni por la API
+(`/api/students/` es de sólo lectura): se crean y actualizan únicamente con la carga CSV validada, que deja
+trazabilidad por registro.
+
+Los usuarios no se eliminan físicamente: se desactivan para conservar la trazabilidad (y se revocan sus sesiones).
 
 ## 16. Privacidad y seguridad
 
 - Estudiantes identificados sólo con códigos seudonimizados (`E001`); no se almacenan nombres ni documentos.
 - Datos de desarrollo 100 % sintéticos; `.gitignore` excluye `data/raw/` y `data/private/`.
 - Contraseñas con hash PBKDF2 y validadores de robustez; JWT con rotación y lista negra de refresh tokens.
+- **Sesión:** el refresh token viaja sólo en una cookie `HttpOnly`, `Secure`, `SameSite=Strict` limitada a
+  `/api/auth/` (JavaScript no puede leerlo); el access token (30 min) vive sólo en memoria y se renueva con la
+  cookie, también al recargar la página. Refresh y logout exigen la cabecera `X-Requested-With` (anti-CSRF).
+  "Recordar sesión" decide si la cookie es persistente o de sesión.
+- **Cambio o restablecimiento de contraseña y desactivación:** se revocan todos los refresh tokens del usuario y
+  se rechazan los access tokens emitidos antes del cambio.
+- **Producción (`DEBUG=False`):** redirección a HTTPS, HSTS y cookies seguras por defecto.
+- **IP de auditoría y límite de intentos:** `X-Forwarded-For` sólo se considera con `TRUSTED_PROXY_COUNT` > 0.
+- **Registro interno de acciones:** inicios de sesión, consultas a fichas, gestión de alertas, cambios de modelo y
+  exportaciones quedan en la tabla `AuditLog` (consultable desde `/admin`). No hay módulo de auditoría en la interfaz.
 - Límite de intentos de login (10/min por defecto), CORS restringido, cabeceras de seguridad, validación de
   archivos (extensión, tamaño, contenido binario, UTF-8, número de filas).
 - Auditoría de inicios de sesión, cargas, predicciones, cambios de usuarios y seguimientos, sin datos
@@ -390,7 +424,7 @@ archivos del admin de Django (Vercel ejecuta `collectstatic` en el build del ser
    |---|---|
    | `SECRET_KEY` | Obligatoria. `python -c "import secrets; print(secrets.token_urlsafe(50))"` |
    | `SEED_DEMO` | `true` para crear usuarios y datos **sintéticos** de demostración en el primer arranque |
-   | `DEMO_PASSWORD` | Contraseña de los usuarios demo (`admin`, `coordinador`, `profesor`, `profesor2`). Obligatoria si `SEED_DEMO=true` |
+   | `DEMO_PASSWORD` | Contraseña de los usuarios demo (`admin`, `coordinador`, `coordinador2`). Obligatoria si `SEED_DEMO=true` |
    | `ALLOWED_HOSTS` | Opcional: dominios propios (los `*.vercel.app` ya están permitidos) |
 
    Opcionales: `RISK_LOW_THRESHOLD`, `RISK_MEDIUM_THRESHOLD`, `JWT_ACCESS_TOKEN_LIFETIME`,
@@ -425,26 +459,31 @@ DATABASE_URL="<url de Neon>" SECRET_KEY=x python manage.py createsuperuser
 
 Menú **Reentrenamiento** (sólo Administrador; los endpoints también exigen el rol en el backend).
 
-1. **Datos**: cargar un CSV o usar el dataset de referencia **sintético**. Se valida extensión, tamaño, UTF-8,
+1. **Datos**: cargar un CSV. Se valida extensión, tamaño, UTF-8,
    columnas obligatorias (las de `sipd_ml/config.py`: variables del modelo sin las derivadas + `dropout`), tipos,
    rangos (los mismos del validador de cargas), valores faltantes, etiquetas 0/1, coherencia de créditos y
    mínimos técnicos (100 registros y 10 por clase). Las variables de encuesta son opcionales (se imputan).
    El archivo validado se guarda en BD con su SHA-256 y se entrena exactamente con ese contenido.
 2. **Configuración**: algoritmos del procedimiento (Regresión Logística, Random Forest y XGBoost si está
-   instalado) y métrica de selección (`f1`, `recall`, `roc_auc`, `precision`). La partición estratificada 75/25,
-   la semilla 42 y el umbral de evaluación 0,30 son fijos para conservar la comparabilidad.
+   instalado). El candidato recomendado es el de mejor F1-score; la partición estratificada 75/25, la semilla 42 y
+   el umbral de evaluación 0,30 son fijos para conservar la comparabilidad. El formulario de nuevo
+   reentrenamiento está al inicio de la página.
 3. **Confirmación** con resumen (datos, registros, algoritmos, advertencias, consecuencias). Una restricción en
    BD impide dos entrenamientos simultáneos y un dataset ya entrenado no se reutiliza por accidente.
 4. **Ejecución** en segundo plano con `sipd_ml.pipeline.run_training_pipeline` (el mismo de `train.py`). Estados
    reales: Pendiente → Validando datos → Preparando datos → Entrenando (n de N) → Evaluando → Registrando →
    Completado / Fallido / Cancelado (sólo antes de empezar). La interfaz consulta el estado cada 3 s, muestra
    etapa y tiempo transcurrido (sin porcentajes inventados) y recupera el estado al volver a la página.
-5. **Evaluación**: métricas del conjunto de **prueba**, matriz de confusión, criterios de aceptación y
-   comparación con la versión activa (se advierte cuando los datasets o la partición no son comparables).
-6. **Aprobación y activación** separadas: las versiones nuevas quedan *pendientes*; sólo se aprueban si cumplen
-   los criterios y sólo se activan con una acción explícita. Las versiones entrenadas offline y registradas con
+5. **Evaluación**: al terminar, cada modelo se muestra como una *flashcard*: el frente compara sus métricas de
+   **prueba** con las del modelo activo (con la diferencia) e incluye las acciones; al voltearla se ven la matriz de
+   confusión, los criterios de aceptación y las advertencias de comparabilidad.
+6. **Aprobación y activación** separadas: las versiones nuevas quedan *pendientes* y sólo se ven en su
+   entrenamiento. **Sólo se guardan los modelos aprobados**: aprobar la deja disponible (si cumple los criterios);
+   rechazar la elimina por completo (artefactos y registro); al iniciar un nuevo entrenamiento se descartan las
+   versiones de entrenamientos anteriores que quedaron sin decidir. Activar es siempre una acción explícita. Las versiones entrenadas offline y registradas con
    `sync_models` figuran como "Registrado sin flujo de aprobación" y pueden activarse como antes.
-7. **Recuperación**: cualquier versión que haya estado activa puede volver a activarse. Las versiones nunca se borran.
+7. **Recuperación**: cualquier versión que haya estado activa puede volver a activarse. Las versiones aprobadas o
+   que estuvieron activas nunca se borran.
 
 **Criterios de aceptación.** Técnicos (obligatorios): métricas calculadas, ambas clases en el conjunto de prueba,
 mismas variables que el servicio de predicción y artefactos íntegros (SHA-256) que cargan y predicen. El proyecto
@@ -485,18 +524,76 @@ notificaciones de "reporte disponible".
 
 ## 20. Reportes y exportación
 
-Menú **Reportes**, con tres tipos:
-
-- **Riesgo estudiantil** (todos los roles, dentro de su ámbito): estudiantes analizados, distribución y porcentaje
+Menú **Reportes**: reporte de **riesgo estudiantil** (todos los roles, dentro de su ámbito): estudiantes analizados, distribución y porcentaje
   por nivel, por programa y por semestre, versión(es) del modelo usadas; filtros por periodo, programa,
   semestre y fechas. Fuente: predicciones **vigentes** almacenadas. El listado individual (CSV, códigos
-  seudonimizados, sin variables socioeconómicas) es sólo para el Administrador.
-- **Evaluación de modelos**: métricas de prueba, tamaños de entrenamiento/prueba, matriz de confusión,
-  aprobación, estado activo y *grupo de evaluación* (sólo son comparables versiones del mismo dataset y partición).
-- **Actividad administrativa** (Administrador): reentrenamientos, activaciones y recuperaciones, conteo de acciones
-  de auditoría (predicciones, cargas, exportaciones…) y fecha desde la que hay registros.
+  seudonimizados, sin variables socioeconómicas) es sólo para el Administrador. Las métricas de los modelos se
+  consultan en Reentrenamiento y en Predicciones (Administrador).
 
 **PDF** (reportlab): título, filtros, resumen ejecutivo, tablas, gráfico de barras, fuente, versión del modelo,
 advertencias y "Página X de Y". **CSV**: UTF-8 con BOM, mismos filtros y cálculos que la pantalla, celdas vacías
 para valores nulos, protección contra fórmulas (`=`, `+`, `-`, `@`) y límite `REPORT_EXPORT_MAX_ROWS`. Cada
-exportación queda en auditoría. Sin datos, el reporte lo indica en lugar de rellenarse.
+exportación queda en el registro interno de acciones. Sin datos, el reporte lo indica en lugar de rellenarse.
+
+## 21. Referencia Civitas Learning y cambios de la versión
+
+Tomando como referencia la investigación sobre *Institutional Impact Platform* (Civitas Learning), se adoptó su
+cadena **dato → predicción con nivel y cambio → lista priorizada → ficha con factores → acción registrada**, sin
+copiar su escala ni cambiar el modelo, los umbrales (0,30 / 0,60) ni el sentido del puntaje (alto = riesgo):
+
+| Civitas (documentado) | SIPD |
+|---|---|
+| Cambio semanal de la predicción como dato y filtro | **Cambio frente a la predicción vigente del periodo anterior** (puntos porcentuales) en listado, ficha, Inicio y alertas; filtro *Tendencia* y orden *Mayor aumento* |
+| Lista de trabajo priorizada y filtros avanzados | Listado ordenado por defecto de mayor a menor riesgo, filtros como etiquetas removibles, exportación CSV del listado filtrado |
+| Ficha con *Inspiration* / *Intervention* | Factores separados en "asociadas a mayor riesgo" y "a menor riesgo"; icono ℹ con los rangos vigentes; leyenda "estimación, no certeza" |
+| Alertas con responsable, comentario y resolución | **Alertas tempranas** automáticas (nivel Alto o aumento ≥ `ALERT_RISE_THRESHOLD`), una por estudiante y periodo, gestionadas **con el seguimiento del estudiante** ("Gestionar seguimiento" abre el formulario de intervención): al registrarlo la alerta pasa a *En atención* con el coordinador responsable, y al marcarlo *Atendido* o *Cerrado* la alerta se cierra con su observación; aviso agregado a los coordinadores del programa |
+| Buscador en el encabezado | Búsqueda global por código que abre la ficha |
+| Menú por tareas (*Connect / Advise / Report*) | Menú agrupado en Analizar / Atender / Administrar / Cuenta |
+| Visibilidad por rol y unidad, *fail-closed* | Coordinador limitado a sus programas; sin programas no ve estudiantes |
+| No mostrar la predicción al estudiante | Aviso en la gestión de alertas |
+| Trazabilidad | Bitácora de consultas a fichas y de la gestión de alertas |
+
+No se implementaron (prioridad media o baja en la investigación, o requieren infraestructura externa): cinco
+bandas, citas y calendario, mensajería por correo o SMS y análisis de impacto de iniciativas.
+
+**Inicio.** El filtro *Nivel de riesgo* ofrece Todos (por defecto), Alto, Medio y Bajo, y se aplica a las tarjetas,
+los gráficos y la tabla de estudiantes que requieren atención.
+
+**Seguimiento e historial.** *Seguimiento* muestra un registro por estudiante (su último seguimiento, con el estado
+actual) y *Editar* lo actualiza. El historial completo de intervenciones se consulta en *Historial* (al buscar un
+estudiante) y en la ficha, donde sólo se puede **registrar** un seguimiento nuevo, no editar los anteriores.
+
+**Modelos disponibles (Predicciones).** Una fila por algoritmo (Regresión Logística, Random Forest, XGBoost) con un
+selector de versión; las métricas y el botón *Activar* corresponden a la versión elegida.
+
+## 22. Recuperación de contraseña por correo (Gmail)
+
+En el inicio de sesión, **¿Olvidó su contraseña?** pide el correo institucional y envía un enlace para crear una
+nueva contraseña. El enlace es válido 30 minutos y de un solo uso; al usarlo se cierran todas las sesiones del
+usuario. La respuesta es siempre la misma (no revela qué correos existen) y hay un límite de 5 solicitudes por hora.
+Al cambiar la contraseña desde *Perfil*, la sesión se cierra y el inicio de sesión confirma que el cambio se hizo.
+
+**Configurar el envío con Gmail**
+
+1. Cree una cuenta dedicada (por ejemplo `sipd.udes@gmail.com`); evite usar un correo personal.
+2. En *Cuenta de Google → Seguridad*, active la **Verificación en dos pasos**.
+3. En *Seguridad → Contraseñas de aplicaciones*, cree una para "SIPD". Google muestra 16 caracteres: esa es la
+   contraseña que usará el sistema (no la de la cuenta).
+4. Defina las variables en `backend/.env` (o en Vercel / el servidor):
+
+   | Variable | Valor |
+   |---|---|
+   | `EMAIL_HOST_USER` | `sipd.udes@gmail.com` |
+   | `EMAIL_HOST_PASSWORD` | la contraseña de aplicación (sin espacios) |
+   | `DEFAULT_FROM_EMAIL` | `SIPD UDES <sipd.udes@gmail.com>` |
+   | `FRONTEND_URL` | dirección pública de la aplicación (va en el enlace), p. ej. `https://sipd.vercel.app` |
+   | `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS` | ya vienen como `smtp.gmail.com`, `587`, `True` |
+
+5. Pruebe el envío: `cd backend && python manage.py sendtestemail su-correo@dominio.com`.
+
+Sin `EMAIL_HOST_USER`, los correos se escriben en la consola del backend (útil en desarrollo). Gmail admite del
+orden de 500 destinatarios por día en cuentas personales; si cambia la contraseña de la cuenta de Gmail, la
+contraseña de aplicación deja de servir y hay que generar otra.
+
+**Identidad visual.** El escudo de la Universidad de Santander (`frontend/public/escudo-udes.png`) aparece en el
+menú, el inicio de sesión, el ícono de la pestaña y el correo de recuperación.

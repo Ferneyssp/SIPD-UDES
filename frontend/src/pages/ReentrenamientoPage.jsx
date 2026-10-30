@@ -1,4 +1,4 @@
-import { BrainCog, CheckCircle2, Database, FileSpreadsheet, RotateCcw, UploadCloud } from "lucide-react";
+import { BrainCog, CheckCircle2, FileSpreadsheet, UploadCloud } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import Alert from "../components/Alert";
@@ -11,9 +11,8 @@ import Filter, { FilterBar } from "../components/Filter";
 import Loading from "../components/Loading";
 import PageHeader from "../components/PageHeader";
 import Pagination from "../components/Pagination";
-import Select from "../components/Select";
 import StatusBadge from "../components/StatusBadge";
-import TrainingRunDetail, { APPROVAL_CLASS, METRICS, RUN_STATUS_CLASS, formatMetric } from "../components/TrainingRunDetail";
+import TrainingRunDetail, { METRICS, RUN_STATUS_CLASS, formatMetric } from "../components/TrainingRunDetail";
 import { useApi } from "../hooks/useApi";
 import { trainingService } from "../services/api";
 import { getErrorMessage } from "../utils/errors";
@@ -36,7 +35,6 @@ function ModelsStatus({ overview }) {
     { key: "trained_at", header: "Entrenado", render: (m) => formatDateTime(m.trained_at) },
     ...METRICS.map(([key, label]) => ({ key, header: label, align: "right", render: (m) => formatMetric(m.metrics?.[key]) })),
     { key: "origin", header: "Origen", render: (m) => (m.training_run ? `Web (#${m.training_run})` : "Offline") },
-    { key: "data", header: "Datos", render: (m) => (m.is_synthetic ? <StatusBadge className="status-warning" label="Sintéticos" /> : <span className="text-muted">No marcados</span>) },
     { key: "state", header: "Estado", render: versionState },
   ];
   const active = overview.active_model;
@@ -72,7 +70,6 @@ function ValidationReport({ dataset }) {
           <div className="mini-stat"><span>Casos sin deserción (0)</span><strong>{formatNumber(report.summary?.class_counts?.["0"])}</strong></div>
         </div>
       )}
-      {dataset.is_synthetic && <Alert type="warning">El dataset está marcado como SINTÉTICO: las métricas sólo servirán como prueba técnica.</Alert>}
       {report.errors.length > 0 && (
         <DataTable caption="Errores de validación" rowKey={(e) => `${e.code}-${e.column}-${e.message}`} rows={report.errors}
           columns={[
@@ -99,7 +96,8 @@ function NewTraining({ config, onStarted, blocked }) {
   const [validating, setValidating] = useState(false);
   const [error, setError] = useState(null);
   const [algorithms, setAlgorithms] = useState(config.algorithms.map((a) => a.value));
-  const [metric, setMetric] = useState(config.default_selection_metric);
+  // El mejor candidato se recomienda con la métrica por defecto del procedimiento (no es configurable).
+  const metric = config.default_selection_metric;
   const [confirming, setConfirming] = useState(false);
   const [starting, setStarting] = useState(false);
   const maxMb = config.dataset.max_mb;
@@ -119,13 +117,13 @@ function NewTraining({ config, onStarted, blocked }) {
     return setFile(selected);
   };
 
-  const validate = async (useReference = false) => {
+  const validate = async () => {
     setValidating(true);
     setError(null);
     try {
-      setDataset(useReference ? await trainingService.useReferenceDataset() : await trainingService.validateDataset(file));
+      setDataset(await trainingService.validateDataset(file));
     } catch (err) {
-      if (err.response?.status === 422 && err.response.data?.id) setDataset(err.response.data);
+      if (err.response?.status === 422 && err.response.data?.report) setDataset(err.response.data);
       else setError(getErrorMessage(err, "No se pudo validar el archivo."));
     } finally {
       setValidating(false);
@@ -170,11 +168,8 @@ function NewTraining({ config, onStarted, blocked }) {
           </label>
           {file && <div className="file-chip"><FileSpreadsheet size={18} aria-hidden="true" /><span>{file.name}</span><small className="text-muted">{(file.size / 1024).toFixed(1)} KB</small></div>}
           <div className="button-row">
-            {config.dataset.reference_available && (
-              <Button variant="ghost" icon={Database} disabled={validating || blocked} onClick={() => validate(true)}>Usar dataset de referencia (sintético)</Button>
-            )}
             {(file || dataset) && <Button variant="ghost" onClick={reset}>Limpiar</Button>}
-            <Button icon={CheckCircle2} disabled={!file || Boolean(dataset) || blocked} loading={validating} onClick={() => validate(false)}>Validar archivo</Button>
+            <Button icon={CheckCircle2} disabled={!file || Boolean(dataset) || blocked} loading={validating} onClick={validate}>Validar archivo</Button>
           </div>
         </div>
         <div>
@@ -207,8 +202,6 @@ function NewTraining({ config, onStarted, blocked }) {
               ))}
             </div>
           </fieldset>
-          <Select label="Métrica para recomendar el mejor candidato" value={metric} onChange={(e) => setMetric(e.target.value)}
-            options={config.selection_metrics.map((m) => ({ value: m, label: METRICS.find(([k]) => k === m)?.[1] || m }))} />
           <p className="text-muted small">
             Parámetros fijos del procedimiento experimental (no modificables para conservar la comparabilidad): partición
             estratificada {Math.round((1 - fixed.test_fraction) * 100)} % entrenamiento / {Math.round(fixed.test_fraction * 100)} % prueba,
@@ -230,9 +223,9 @@ function NewTraining({ config, onStarted, blocked }) {
         onCancel={() => setConfirming(false)}
         message={
           <span className="confirm-summary">
-            <strong>Datos:</strong> {dataset?.filename} ({formatNumber(dataset?.rows)} registros{dataset?.is_synthetic ? ", sintéticos" : ""})<br />
+            <strong>Datos:</strong> {dataset?.filename} ({formatNumber(dataset?.rows)} registros)<br />
             <strong>Algoritmos:</strong> {algorithms.map((a) => labels[a]).join(", ")}<br />
-            <strong>Métrica de selección:</strong> {METRICS.find(([k]) => k === metric)?.[1] || metric} · umbral {fixed.threshold}<br />
+            <strong>Umbral de evaluación:</strong> {fixed.threshold}<br />
             {warnings.length > 0 && <><strong>Advertencias:</strong> {warnings.length} (ver detalle de la validación)<br /></>}
             El entrenamiento se ejecuta en el servidor y puede tardar varios minutos. Se crearán versiones nuevas
             <strong> pendientes de aprobación</strong>; el modelo activo y las versiones anteriores no se modifican.
@@ -258,9 +251,6 @@ function RunHistory({ config, selected, onSelect, refreshKey }) {
     { key: "algorithms", header: "Algoritmos", render: (r) => r.algorithms.length },
     { key: "status", header: "Estado", render: (r) => <StatusBadge className={RUN_STATUS_CLASS[r.status]} label={r.status_display} /> },
     { key: "version", header: "Versión", render: (r) => r.version || "—" },
-    { key: "f1", header: "F1 (mejor)", align: "right", render: (r) => formatMetric(r.versions.find((v) => v.selected)?.metrics?.f1) },
-    { key: "activation", header: "Activación", render: (r) => (r.versions.some((v) => v.active) ? <StatusBadge className="status-success" label="Activa" /> : r.versions.length ? <StatusBadge className={APPROVAL_CLASS[r.versions.find((v) => v.selected)?.approval_status]} label={r.versions.find((v) => v.selected)?.approval_status_display} /> : "—") },
-    { key: "error_message", header: "Error", className: "cell-wrap", render: (r) => r.error_message || "—" },
   ];
   return (
     <Card title="Historial de entrenamientos" padded={false} subtitle="Seleccione una ejecución para ver su detalle y evaluación.">
@@ -276,56 +266,6 @@ function RunHistory({ config, selected, onSelect, refreshKey }) {
         emptyTitle="No hay entrenamientos registrados." caption="Historial de entrenamientos"
         onRowClick={(r) => onSelect(r.id)} rowKey={(r) => `${r.id}${r.id === selected ? "-selected" : ""}`} />
       {history.data && <Pagination page={page} pageSize={HISTORY_PAGE_SIZE} count={history.data.count} onPageChange={setPage} />}
-    </Card>
-  );
-}
-
-function ActivationHistory({ refreshKey, onChanged }) {
-  const data = useApi(() => trainingService.activations(), [refreshKey], { errorMessage: "Error al cargar el historial de activaciones." });
-  const [target, setTarget] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState(null);
-  const rollback = async () => {
-    setBusy(true);
-    try {
-      const version = await trainingService.rollback(target.id);
-      setMessage({ type: "success", text: `Se recuperó ${version.name} v${version.version} como modelo activo.` });
-      onChanged();
-      window.dispatchEvent(new Event("sipd:notifications-changed"));
-    } catch (err) {
-      setMessage({ type: "error", text: getErrorMessage(err) });
-    } finally {
-      setBusy(false);
-      setTarget(null);
-    }
-  };
-  const candidates = data.data?.rollback_candidates || [];
-  return (
-    <Card title="Activaciones y recuperación de versiones" padded={false}
-      subtitle="Las versiones anteriores nunca se borran. Sólo pueden recuperarse versiones que estuvieron activas y cuyos artefactos superan la verificación de integridad.">
-      {message && <div className="card-inner"><Alert type={message.type} onClose={() => setMessage(null)}>{message.text}</Alert></div>}
-      {candidates.length > 0 && (
-        <div className="card-inner rollback-list">
-          {candidates.map((v) => (
-            <div key={v.id} className="rollback-item">
-              <span><strong>{v.name}</strong> v{v.version} <small className="text-muted">F1 {formatMetric(v.metrics?.f1)}</small></span>
-              <Button variant="secondary" size="sm" icon={RotateCcw} onClick={() => setTarget(v)}>Recuperar</Button>
-            </div>
-          ))}
-        </div>
-      )}
-      <DataTable caption="Historial de activaciones" rows={data.data?.results} loading={data.loading} error={data.error} onRetry={data.reload}
-        emptyTitle="No hay cambios de modelo activo registrados."
-        columns={[
-          { key: "created_at", header: "Fecha", render: (a) => formatDateTime(a.created_at) },
-          { key: "action_display", header: "Acción" },
-          { key: "previous_label", header: "Versión anterior", render: (a) => a.previous_label || "—" },
-          { key: "new_label", header: "Nueva versión activa" },
-          { key: "performed_by", header: "Responsable", render: (a) => a.performed_by || "Sistema" },
-        ]} />
-      <ConfirmationModal open={Boolean(target)} title="Recuperar versión anterior" confirmLabel="Recuperar" loading={busy}
-        onConfirm={rollback} onCancel={() => setTarget(null)}
-        message={`Se verificará la integridad de ${target?.name} v${target?.version} y, si es correcta, pasará a ser el modelo activo. La versión activa actual se conservará.`} />
     </Card>
   );
 }
@@ -354,13 +294,12 @@ export default function ReentrenamientoPage() {
       <PageHeader title="Reentrenamiento de modelos"
         description="Ejecuta el procedimiento real de entrenamiento y evaluación en el servidor. Las versiones nuevas quedan pendientes de aprobación y se activan sólo por decisión explícita." />
       {!config.enabled && <Alert type="warning" title="Reentrenamiento no disponible en este despliegue.">{config.disabled_reason}</Alert>}
-      <ModelsStatus overview={overview.data} />
-      {selectedRun && <TrainingRunDetail key={selectedRun} runId={selectedRun} onChanged={refresh} />}
       {config.enabled && (
         <NewTraining config={config} blocked={Boolean(activeRunId)} onStarted={(run) => { selectRun(run.id); refresh(); }} />
       )}
+      {selectedRun && <TrainingRunDetail key={selectedRun} runId={selectedRun} onChanged={refresh} />}
+      <ModelsStatus overview={overview.data} />
       <RunHistory config={config} selected={selectedRun} onSelect={selectRun} refreshKey={refreshKey} />
-      <ActivationHistory refreshKey={refreshKey} onChanged={refresh} />
     </>
   );
 }

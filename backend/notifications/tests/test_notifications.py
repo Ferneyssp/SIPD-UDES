@@ -9,14 +9,14 @@ class NotificationApiTests(SipdAPITestCase):
         with self.captureOnCommitCallbacks(execute=True):
             notify([self.admin], NotificationType.TRAINING_COMPLETED, "Entrenamiento listo", "Detalle", link="/reentrenamiento")
             notify([self.admin], NotificationType.DATASET_REJECTED, "Dataset rechazado")
-            notify([self.professor], NotificationType.PREDICTIONS_COMPLETED, "Nuevas predicciones")
+            notify([self.coordinator_sis], NotificationType.PREDICTIONS_COMPLETED, "Nuevas predicciones")
 
     def test_each_user_only_sees_own_notifications(self):
-        data = self.client_for(self.professor).get("/api/notifications/").data
+        data = self.client_for(self.coordinator_sis).get("/api/notifications/").data
         self.assertEqual(data["count"], 1)
         self.assertEqual(data["results"][0]["title"], "Nuevas predicciones")
         foreign = Notification.objects.filter(recipient=self.admin).first()
-        client = self.client_for(self.professor)
+        client = self.client_for(self.coordinator_sis)
         self.assertEqual(client.get(f"/api/notifications/{foreign.pk}/").status_code, 404)
         self.assertEqual(client.post(f"/api/notifications/{foreign.pk}/read/").status_code, 404)
         self.assertIsNone(Notification.objects.get(pk=foreign.pk).read_at)
@@ -34,7 +34,7 @@ class NotificationApiTests(SipdAPITestCase):
         # Leer no borra el historial.
         self.assertEqual(client.get("/api/notifications/").data["count"], 2)
         # Marcar todas no afecta a otros usuarios.
-        self.assertEqual(self.client_for(self.professor).get("/api/notifications/unread-count/").data["unread"], 1)
+        self.assertEqual(self.client_for(self.coordinator_sis).get("/api/notifications/unread-count/").data["unread"], 1)
 
     def test_filters(self):
         client = self.client_for(self.admin)
@@ -45,9 +45,9 @@ class NotificationApiTests(SipdAPITestCase):
         self.assertEqual(client.get("/api/notifications/?is_read=true").data["count"], 2)
 
     def test_recipient_cannot_be_changed_by_client(self):
-        client = self.client_for(self.professor)
+        client = self.client_for(self.coordinator_sis)
         self.assertEqual(client.post("/api/notifications/", {"recipient": self.admin.pk, "title": "x"}).status_code, 405)
-        target = Notification.objects.get(recipient=self.professor)
+        target = Notification.objects.get(recipient=self.coordinator_sis)
         self.assertEqual(client.patch(f"/api/notifications/{target.pk}/", {"recipient": self.admin.pk}).status_code, 405)
 
     def test_duplicate_events_are_not_repeated(self):
@@ -66,6 +66,6 @@ class NotificationApiTests(SipdAPITestCase):
             self.client_for(self.admin).post("/api/predictions/run-batch/", {"academic_period": "2026-2", "program": "CIV"},
                                              format="json")
         self.assertTrue(Notification.objects.filter(recipient=self.admin, type=NotificationType.PREDICTIONS_COMPLETED).exists())
-        # El coordinador sin programas asignados tiene acceso a todo; el profesor (sólo SIS) no recibe aviso de CIV.
+        # El coordinador de SIS y CIV recibe el aviso; el coordinador sólo de SIS no recibe aviso de CIV.
         self.assertTrue(Notification.objects.filter(recipient=self.coordinator, type=NotificationType.PREDICTIONS_COMPLETED).exists())
-        self.assertEqual(Notification.objects.filter(recipient=self.professor, type=NotificationType.PREDICTIONS_COMPLETED).count(), 1)
+        self.assertEqual(Notification.objects.filter(recipient=self.coordinator_sis, type=NotificationType.PREDICTIONS_COMPLETED).count(), 1)

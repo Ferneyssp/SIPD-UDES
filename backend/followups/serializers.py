@@ -2,7 +2,8 @@ from rest_framework import serializers
 
 from academic.models import AcademicPeriod
 from students.models import Student
-from students.scoping import user_can_access_student
+from students.scoping import can_be_responsible, user_can_access_student
+from users.models import Role
 from users.models import User
 
 from .models import FollowUp
@@ -35,6 +36,21 @@ class FollowUpSerializer(serializers.ModelSerializer):
         if not user_can_access_student(self.context["request"].user, student):
             raise serializers.ValidationError("No tiene acceso a este estudiante.")
         return student
+
+    def validate(self, attrs):
+        """El responsable es siempre un coordinador con acceso al programa del estudiante (nunca el
+        Administrador). Si se omite al crear, lo es quien registra, salvo que sea Administrador."""
+        student = attrs.get("student") or getattr(self.instance, "student", None)
+        responsible = attrs.get("user")
+        if responsible is None and self.instance is None:
+            actor = self.context["request"].user
+            if actor.role != Role.COORDINATOR:
+                raise serializers.ValidationError({"user": "Seleccione el coordinador responsable del seguimiento."})
+            responsible = attrs["user"] = actor
+        if student and responsible and not can_be_responsible(responsible, student):
+            raise serializers.ValidationError(
+                {"user": "El responsable debe ser un coordinador con acceso al programa del estudiante."})
+        return attrs
 
     def validate_observation(self, value):
         value = value.strip()

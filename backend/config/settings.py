@@ -67,8 +67,6 @@ ML_TRAINING_STALE_MINUTES = int(env("ML_TRAINING_STALE_MINUTES", "10"))
 # Mínimos técnicos para poder hacer la partición estratificada 75/25 y calcular métricas.
 ML_TRAINING_MIN_ROWS = int(env("ML_TRAINING_MIN_ROWS", "100"))
 ML_TRAINING_MIN_CLASS_ROWS = int(env("ML_TRAINING_MIN_CLASS_ROWS", "10"))
-# Dataset de referencia (SINTÉTICO) ofrecido como fuente de datos si existe en el servidor.
-ML_REFERENCE_DATASET = Path(env("ML_REFERENCE_DATASET", PROJECT_ROOT / "data" / "sample" / "synthetic_training_dataset.csv"))
 
 
 def _optional_float(name: str):
@@ -86,6 +84,23 @@ ML_ACCEPTANCE_MIN_METRICS = {
         "roc_auc": _optional_float("ML_ACCEPTANCE_MIN_ROC_AUC"),
     }.items() if value is not None
 }
+
+# --- Correo (recuperación de contraseña) -------------------------------------
+# Con EMAIL_HOST_USER definido se envía por SMTP (Gmail: smtp.gmail.com, 587, TLS y una "contraseña de
+# aplicación"); si no, los correos se escriben en la consola del backend (útil en desarrollo).
+EMAIL_HOST = env("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(env("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", "")
+EMAIL_TIMEOUT = int(env("EMAIL_TIMEOUT", "15"))
+EMAIL_BACKEND = env("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend" if EMAIL_HOST_USER
+                    else "django.core.mail.backends.console.EmailBackend")
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", f"SIPD <{EMAIL_HOST_USER}>" if EMAIL_HOST_USER else "SIPD <no-reply@localhost>")
+# Dirección pública del frontend: se usa en el enlace del correo de recuperación.
+FRONTEND_URL = env("FRONTEND_URL", "http://localhost:5173")
+# Vigencia del enlace de recuperación (segundos).
+PASSWORD_RESET_TIMEOUT = int(env("PASSWORD_RESET_TIMEOUT", "1800"))
 
 # Nombre institucional usado en los reportes PDF.
 INSTITUTION_NAME = env("INSTITUTION_NAME", "Institución de Educación Superior")
@@ -113,6 +128,7 @@ INSTALLED_APPS = [
     "audit",
     "notifications",
     "reports",
+    "alerts",
 ]
 
 MIDDLEWARE = [
@@ -194,7 +210,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # --- API REST -----------------------------------------------------------------
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework_simplejwt.authentication.JWTAuthentication"],
+    "DEFAULT_AUTHENTICATION_CLASSES": ["users.tokens.SipdJWTAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_PAGINATION_CLASS": "config.pagination.StandardPagination",
     "DEFAULT_FILTER_BACKENDS": [
@@ -204,7 +220,10 @@ REST_FRAMEWORK = {
     ],
     "EXCEPTION_HANDLER": "config.exceptions.api_exception_handler",
     "COERCE_DECIMAL_TO_STRING": False,
-    "DEFAULT_THROTTLE_RATES": {"login": env("LOGIN_THROTTLE_RATE", "10/min")},
+    "DEFAULT_THROTTLE_RATES": {
+        "login": env("LOGIN_THROTTLE_RATE", "10/min"),
+        "password_reset": env("PASSWORD_RESET_THROTTLE_RATE", "5/hour"),
+    },
 }
 
 SIMPLE_JWT = {
@@ -218,12 +237,24 @@ SIMPLE_JWT = {
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
+# Cookie HttpOnly del refresh token (Secure salvo en desarrollo o en Docker local por http).
+AUTH_COOKIE_SECURE = env_bool("SECURE_COOKIES", not DEBUG)
+
+# Número de proxies inversos de confianza delante de Django (Nginx en Docker, Vercel). Con 0 se usa
+# REMOTE_ADDR y se ignora X-Forwarded-For, que un cliente podría falsificar.
+TRUSTED_PROXY_COUNT = int(env("TRUSTED_PROXY_COUNT", "1" if ON_VERCEL else "0"))
+REST_FRAMEWORK["NUM_PROXIES"] = TRUSTED_PROXY_COUNT or 0
+
+CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", ",".join(CORS_ALLOWED_ORIGINS))
 
 # --- Umbrales de riesgo (ÚNICA fuente de verdad) ------------------------------
 RISK_LOW_THRESHOLD = float(env("RISK_LOW_THRESHOLD", "0.30"))
 RISK_MEDIUM_THRESHOLD = float(env("RISK_MEDIUM_THRESHOLD", "0.60"))
+# Alerta temprana por aumento de la probabilidad entre la predicción anterior y la actual (0.15 = 15 puntos).
+# Es un parámetro de diseño, no un valor validado con datos institucionales.
+ALERT_RISE_THRESHOLD = float(env("ALERT_RISE_THRESHOLD", "0.15"))
 
 # --- Reglas académicas institucionales ----------------------------------------
 GPA_MIN = float(env("GPA_MIN", "0.0"))
@@ -239,11 +270,17 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = UPLOAD_MAX_BYTES + 1024 * 1024
 # --- Seguridad en producción --------------------------------------------------
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
+SECURE_REFERRER_POLICY = "same-origin"
 if not DEBUG:
     SESSION_COOKIE_SECURE = env_bool("SECURE_COOKIES", True)
     CSRF_COOKIE_SECURE = env_bool("SECURE_COOKIES", True)
-    SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", False)
-if ON_VERCEL:
+    # Producción: HTTPS obligatorio y HSTS (1 año por defecto). Docker local por http los desactiva.
+    SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", True) and "test" not in sys.argv
+    SECURE_HSTS_SECONDS = int(env("SECURE_HSTS_SECONDS", "31536000"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", False)
+    SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD", False)
+    SECURE_REDIRECT_EXEMPT = [r"^api/health/$"]
+if ON_VERCEL or TRUSTED_PROXY_COUNT:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 LOGGING = {

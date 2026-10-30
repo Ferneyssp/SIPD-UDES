@@ -1,32 +1,56 @@
-import { ArrowLeft, BrainCircuit, History, Pencil, Plus } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, BellRing, History } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
-import Alert from "../components/Alert";
-import Button from "../components/Button";
 import Card from "../components/Card";
 import DataTable from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import ErrorMessage from "../components/ErrorMessage";
-import FollowUpFormModal from "../components/FollowUpFormModal";
+import FollowUpHistory from "../components/FollowUpHistory";
 import Loading from "../components/Loading";
 import PageHeader from "../components/PageHeader";
-import RiskBadge from "../components/RiskBadge";
+import { manageAlertPath } from "./AlertasPage";
+import RiskBadge, { RiskChange, RiskRangesInfo } from "../components/RiskBadge";
 import { RiskTimelineChart } from "../components/RiskCharts";
 import StatusBadge from "../components/StatusBadge";
-import StudentFormModal from "../components/StudentFormModal";
-import { PREDICTION_DISCLAIMER, ROLES } from "../config/appConfig";
-import { useAuth } from "../context/AuthContext";
+import { PREDICTION_DISCLAIMER } from "../config/appConfig";
 import { useConfig } from "../context/ConfigContext";
 import { useApi } from "../hooks/useApi";
-import { followupService, predictionService, studentService } from "../services/api";
-import { getErrorMessage } from "../utils/errors";
-import { formatDate, formatDateTime, formatFeatureValue, formatProbability } from "../utils/format";
+import { alertService, predictionService, studentService } from "../services/api";
+import { formatDateTime, formatFeatureValue, formatProbability } from "../utils/format";
 import { riskInfo } from "../utils/risk";
 
 function displayFeature(key, value) {
   if (key === "approval_rate" && value !== null && value !== undefined) return `${Math.round(value * 100)} %`;
   if (key === "works_while_studying" && value !== null && value !== undefined) return value ? "Sí" : "No";
   return formatFeatureValue(value);
+}
+
+const ALERT_STATUS_CLASS = { ABIERTA: "status-danger", EN_ATENCION: "status-warning", CERRADA: "status-muted" };
+
+/** Factores separados por dirección, como Inspiration / Intervention en Civitas Inspire. */
+function FactorGroups({ factors }) {
+  const up = factors.filter((f) => f.direction.includes("mayor"));
+  const down = factors.filter((f) => f.direction.includes("menor"));
+  const neutral = factors.filter((f) => !up.includes(f) && !down.includes(f));
+  const group = (title, items, tone, symbol) => items.length > 0 && (
+    <div className={`factor-group ${tone}`}>
+      <h3>{symbol} {title}</h3>
+      <ul className="factor-list">
+        {items.map((factor) => (
+          <li key={factor.feature}>
+            <strong>{factor.label}</strong>
+            <span className="text-muted"> · valor: {displayFeature(factor.feature, factor.value)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+  return (
+    <div className="factor-groups">
+      {group("Asociadas a mayor riesgo estimado", up, "up", "▲")}
+      {group("Asociadas a menor riesgo estimado", down, "down", "▼")}
+      {group("Variables con alta relevancia para el modelo", neutral, "neutral", "●")}
+    </div>
+  );
 }
 
 function InfoList({ items }) {
@@ -44,19 +68,13 @@ function InfoList({ items }) {
 
 export default function EstudianteDetallePage() {
   const { code } = useParams();
-  const { user } = useAuth();
   const { config } = useConfig();
-  const isAdmin = user.role === ROLES.ADMIN;
-  const [followupModal, setFollowupModal] = useState({ open: false, followup: null });
-  const [editOpen, setEditOpen] = useState(false);
-  const [running, setRunning] = useState(false);
-  const [notice, setNotice] = useState(null);
 
   const student = useApi(() => studentService.get(code), [code], { errorMessage: "Error al cargar el estudiante." });
   const predictionId = student.data?.current_prediction_id;
   const prediction = useApi(() => predictionService.get(predictionId), [predictionId], { enabled: Boolean(predictionId) });
   const history = useApi(() => predictionService.history(code), [code]);
-  const followups = useApi(() => followupService.list({ student_exact: code, page_size: 50 }), [code]);
+  const alerts = useApi(() => alertService.list({ student: code, page_size: 10 }), [code]);
 
   if (student.loading && !student.data) return <Loading message="Cargando estudiante..." />;
   if (student.error) {
@@ -73,20 +91,6 @@ export default function EstudianteDetallePage() {
   const current = prediction.data;
   const labels = config?.feature_labels || {};
 
-  const runPrediction = async () => {
-    setRunning(true);
-    setNotice(null);
-    try {
-      const result = await predictionService.run(code);
-      setNotice({ type: "success", text: `Predicción generada: riesgo estimado ${result.risk_percentage} % (${result.risk_level}).` });
-      await Promise.all([student.reload(), history.reload()]);
-    } catch (err) {
-      setNotice({ type: "error", text: getErrorMessage(err, "No se pudo ejecutar la predicción.") });
-    } finally {
-      setRunning(false);
-    }
-  };
-
   const recordColumns = [
     { key: "academic_period", header: "Periodo" },
     { key: "semester", header: "Semestre" },
@@ -97,16 +101,6 @@ export default function EstudianteDetallePage() {
     { key: "academic_status", header: "Estado" },
   ];
 
-  const followupColumns = [
-    { key: "follow_up_date", header: "Fecha", render: (f) => formatDate(f.follow_up_date) },
-    { key: "intervention_type_display", header: "Tipo" },
-    { key: "observation", header: "Observación", className: "cell-wrap" },
-    { key: "user_name", header: "Responsable" },
-    { key: "status", header: "Estado", render: (f) => <StatusBadge status={f.status} label={f.status_display} /> },
-    { key: "edit", header: "", align: "right", render: (f) => (
-      <Button variant="link" size="sm" icon={Pencil} onClick={() => setFollowupModal({ open: true, followup: f })}>Editar</Button>
-    ) },
-  ];
 
   return (
     <>
@@ -118,12 +112,9 @@ export default function EstudianteDetallePage() {
         actions={
           <>
             <Link className="btn btn-secondary btn-md" to={`/historial?student=${data.anonymous_code}`}><History size={16} /> <span>Ver historial</span></Link>
-            {isAdmin && <Button variant="secondary" icon={Pencil} onClick={() => setEditOpen(true)}>Editar</Button>}
-            {isAdmin && <Button icon={BrainCircuit} loading={running} onClick={runPrediction}>Ejecutar predicción</Button>}
           </>
         }
       />
-      {notice && <Alert type={notice.type} onClose={() => setNotice(null)}>{notice.text}</Alert>}
 
       <div className="grid-3">
         <Card title="Resultado predictivo" className={`prediction-card ${riskInfo(data.current_risk_level).className}-border`}>
@@ -131,9 +122,13 @@ export default function EstudianteDetallePage() {
             <EmptyState title="Sin predicción disponible." description="Aún no se ha estimado el riesgo para este estudiante." />
           ) : (
             <div className="prediction-result">
-              <p className="prediction-label">Riesgo estimado de deserción</p>
+              <p className="prediction-label">Riesgo estimado de deserción <RiskRangesInfo levels={config?.risk_levels} /></p>
               <p className={`prediction-value ${riskInfo(data.current_risk_level).className}-text`}>{formatProbability(data.current_probability)}</p>
               <p className="prediction-level">Nivel de riesgo: <RiskBadge level={data.current_risk_level} /></p>
+              <p className="prediction-change">
+                Cambio frente al periodo anterior: <RiskChange points={data.risk_change_points} />
+              </p>
+              <p className="estimate-note">Probabilidad estimada por el modelo; no es una certeza.</p>
               <InfoList items={[
                 ["Modelo utilizado", current ? `${current.model_name} (v${current.model_version_label})` : "—"],
                 ["Periodo", data.current_prediction_period],
@@ -167,22 +162,8 @@ export default function EstudianteDetallePage() {
       </div>
 
       <div className="grid-2">
-        <Card title="Variables asociadas al resultado" subtitle="Variables que más influyeron en la estimación del modelo. Indican asociación, no causalidad.">
-          {current ? (
-            <ul className="factor-list">
-              {current.explanation.map((factor) => (
-                <li key={factor.feature}>
-                  <div>
-                    <strong>{factor.label}</strong>
-                    <span className="text-muted"> · valor: {displayFeature(factor.feature, factor.value)}</span>
-                  </div>
-                  <span className={`factor-direction ${factor.direction.includes("mayor") ? "up" : factor.direction.includes("menor") ? "down" : "neutral"}`}>
-                    {factor.direction.includes("mayor") ? "▲ " : factor.direction.includes("menor") ? "▼ " : "● "}{factor.direction}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : <EmptyState title="Sin predicción disponible." />}
+        <Card title="Factores principales" subtitle="Variables que más influyeron en la estimación del modelo. Indican asociación, no causalidad.">
+          {current ? <FactorGroups factors={current.explanation} /> : <EmptyState title="Sin predicción disponible." />}
         </Card>
         <Card title="Evolución del riesgo estimado">
           {history.error && <ErrorMessage message={history.error} onRetry={history.reload} compact />}
@@ -205,45 +186,26 @@ export default function EstudianteDetallePage() {
         </Card>
       )}
 
-      <Card title="Historial académico disponible" padded={false}>
+      <Card title="Alertas tempranas" padded={false}
+        subtitle="Se generan automáticamente con nivel Alto o con un aumento del riesgo estimado respecto al periodo anterior.">
+        <DataTable caption="Alertas del estudiante" rows={alerts.data?.results} loading={alerts.loading} error={alerts.error}
+          onRetry={alerts.reload} emptyTitle="El estudiante no tiene alertas." columns={[
+            { key: "academic_period", header: "Periodo" },
+            { key: "reason_display", header: "Motivo", className: "cell-wrap" },
+            { key: "status", header: "Estado", render: (a) => <StatusBadge className={ALERT_STATUS_CLASS[a.status]} label={a.status_display} /> },
+            { key: "assigned_to_name", header: "Responsable", render: (a) => a.assigned_to_name || "Sin asignar" },
+            { key: "open", header: "", align: "right", render: (a) => <Link className="link-action" to={manageAlertPath(a.student_code)}><BellRing size={14} aria-hidden="true" /> Gestionar seguimiento</Link> },
+          ]} />
+      </Card>
+
+      <Card title="Historial académico disponible" padded={false}
+        subtitle="Sólo lectura: la información se actualiza mediante la carga de datos institucional.">
         <DataTable columns={recordColumns} rows={data.academic_records} emptyTitle="Sin registros académicos." caption="Historial académico" />
       </Card>
 
-      <Card
-        title="Seguimiento"
-        subtitle="Intervenciones registradas por profesores y coordinadores"
-        actions={<Button icon={Plus} onClick={() => setFollowupModal({ open: true, followup: null })}>Registrar seguimiento</Button>}
-        padded={false}
-      >
-        <DataTable
-          columns={followupColumns}
-          rows={followups.data?.results}
-          loading={followups.loading}
-          error={followups.error}
-          onRetry={followups.reload}
-          emptyTitle="Aún no hay seguimientos registrados."
-          caption="Seguimientos del estudiante"
-        />
-      </Card>
+      <FollowUpHistory studentCode={data.anonymous_code} onSaved={() => { student.reload(); alerts.reload(); }} />
       <p className="disclaimer">{PREDICTION_DISCLAIMER}</p>
 
-      <FollowUpFormModal
-        open={followupModal.open}
-        followup={followupModal.followup}
-        studentCode={data.anonymous_code}
-        onClose={() => setFollowupModal({ open: false, followup: null })}
-        onSaved={() => {
-          setFollowupModal({ open: false, followup: null });
-          followups.reload();
-          student.reload();
-        }}
-      />
-      <StudentFormModal
-        open={editOpen}
-        student={data}
-        onClose={() => setEditOpen(false)}
-        onSaved={() => { setEditOpen(false); student.reload(); }}
-      />
     </>
   );
 }

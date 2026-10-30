@@ -280,70 +280,11 @@ def risk_pdf(report: dict) -> bytes:
                   [[r["semester"], r["total"], r["ALTO"], r["MEDIO"], r["BAJO"], f"{fmt_number(r['ALTO_pct'], 1)} %"]
                    for r in report["by_semester"]])
         pdf.heading("Versión del modelo utilizado")
-        pdf.table(["Modelo", "Versión", "Predicciones", "Datos de entrenamiento"],
-                  [[m["model"], m["version"], m["predictions"], "Sintéticos" if m["is_synthetic"] else "No marcados como sintéticos"]
-                   for m in report["models"]])
+        pdf.table(["Modelo", "Versión", "Predicciones"], [[m["model"], m["version"], m["predictions"]] for m in report["models"]])
     pdf.heading("Fuente de los datos y limitaciones")
     pdf.paragraph(report["source"])
     if report["scope_restricted"]:
         pdf.paragraph("El reporte se limita a los programas asignados al usuario que lo generó.")
-    for notice in report["notices"]:
-        pdf.paragraph(notice, "muted")
-    return pdf.render()
-
-
-def model_pdf(report: dict) -> bytes:
-    pdf = PdfReport("Reporte de evaluación de modelos",
-                    f"Filtros: {filters_text(report['filters'], {'algorithm': 'Algoritmo'})}")
-    versions = report["versions"]
-    pdf.heading("Resumen ejecutivo")
-    if not versions:
-        pdf.paragraph("No hay versiones de modelo registradas.")
-    else:
-        active = next((v for v in versions if v["active"]), None)
-        pdf.paragraph(f"Hay {len(versions)} versiones registradas. Modelo activo: "
-                      + (f"{active['name']} v{active['version']}." if active else "ninguno."))
-        pdf.heading("Métricas en el conjunto de prueba")
-        pdf.table(["Modelo", "Versión", "Accuracy", "Precision", "Recall", "F1", "ROC-AUC", "Umbral"],
-                  [[v["name"], v["version"], *[fmt_number(v["metrics"][k]) for k in ("accuracy", "precision", "recall", "f1", "roc_auc")],
-                    fmt_number(v["threshold"], 2)] for v in versions], widths=[85, 80, None, None, None, None, None, None])
-        pdf.heading("Datos, aprobación y estado")
-        pdf.table(["Modelo", "Versión", "Entrenado", "Registros", "Entren./prueba", "Aprobación", "Activo", "Grupo eval."],
-                  [[v["name"], v["version"], _fmt_date(v["trained_at"]), v["dataset_rows"] or "—",
-                    f"{v['train_size'] or '—'} / {v['test_size'] or '—'}", v["approval_status_display"],
-                    "Sí" if v["active"] else "No", v["comparison_group"] or "—"] for v in versions])
-        pdf.heading("Matrices de confusión (prueba)")
-        pdf.table(["Modelo", "Versión", "VN", "FP", "FN", "VP"],
-                  [[v["name"], v["version"], *[(v["confusion_matrix"] or {}).get(k, "—") for k in ("tn", "fp", "fn", "tp")]]
-                   for v in versions if v["confusion_matrix"]])
-    pdf.heading("Fuente de los datos y limitaciones")
-    pdf.paragraph(report["source"])
-    for notice in report["notices"]:
-        pdf.paragraph(notice, "muted")
-    return pdf.render()
-
-
-def activity_pdf(report: dict) -> bytes:
-    pdf = PdfReport("Reporte de actividad administrativa",
-                    f"Filtros: {filters_text(report['filters'], {'date_from': 'Desde', 'date_to': 'Hasta'})}")
-    training = report["training"]
-    pdf.heading("Resumen ejecutivo")
-    pdf.paragraph(f"Reentrenamientos registrados: {training['total']} (completados: {training['completed']}, fallidos: "
-                  f"{training['failed']}, cancelados: {training['cancelled']}). Cambios de modelo activo: "
-                  f"{len(report['activations'])}.")
-    pdf.heading("Acciones registradas en auditoría")
-    pdf.table(["Acción", "Cantidad"], [[a["label"], a["count"]] for a in report["audit_counts"]], widths=[300, None])
-    pdf.heading("Historial de reentrenamientos")
-    pdf.table(["#", "Inicio", "Fin", "Responsable", "Dataset", "Estado", "Versión", "Error"],
-              [[r["id"], _fmt_date(r["created_at"]), _fmt_date(r["finished_at"]), r["requested_by"], r["dataset"],
-                r["status_display"], r["version"] or "—", r["error"] or "—"] for r in training["runs"]],
-              widths=[22, 62, 62, 60, 80, 55, 70, None])
-    pdf.heading("Activaciones y recuperaciones de modelos")
-    pdf.table(["Fecha", "Acción", "Anterior", "Nueva", "Usuario"],
-              [[_fmt_date(a["created_at"]), a["action_display"], a["previous"] or "—", a["new"], a["performed_by"]]
-               for a in report["activations"]])
-    pdf.heading("Fuente de los datos y limitaciones")
-    pdf.paragraph(report["source"])
     for notice in report["notices"]:
         pdf.paragraph(notice, "muted")
     return pdf.render()

@@ -5,7 +5,6 @@ from django.db import models
 class Role(models.TextChoices):
     ADMIN = "ADMIN", "Administrador"
     COORDINATOR = "COORDINATOR", "Coordinador académico"
-    PROFESSOR = "PROFESSOR", "Profesor"
 
 
 class SipdUserManager(UserManager):
@@ -18,18 +17,22 @@ class User(AbstractUser):
     """Usuario institucional. La contraseña se almacena con hash (PBKDF2 por defecto)."""
 
     email = models.EmailField("correo electrónico", unique=True)
-    role = models.CharField("rol", max_length=20, choices=Role.choices, default=Role.PROFESSOR)
+    role = models.CharField("rol", max_length=20, choices=Role.choices, default=Role.COORDINATOR)
     programs = models.ManyToManyField(
         "academic.Program",
         blank=True,
         related_name="users",
-        help_text="Programas a los que el usuario tiene acceso. Profesores: obligatorio. "
-        "Coordinadores: si está vacío, acceden a todos los programas.",
+        help_text="Programas académicos que el coordinador puede consultar. Sin programas asignados no ve "
+        "estudiantes (el acceso se deniega por defecto).",
     )
     can_manage_users = models.BooleanField(
         "puede administrar usuarios",
         default=False,
         help_text="Permiso explícito para que un coordinador gestione usuarios.",
+    )
+    password_changed_at = models.DateTimeField(
+        null=True, blank=True, editable=False,
+        help_text="Los access tokens emitidos antes de esta fecha se rechazan.",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

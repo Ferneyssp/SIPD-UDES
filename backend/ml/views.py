@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 
 from users.permissions import IsAdminOrReadOnly, IsAdminRole
 
-from .models import ModelActivationLog, ModelVersion, RunStatus, TrainingDataset, TrainingRun
+from .models import ApprovalStatus, ModelActivationLog, ModelVersion, RunStatus, TrainingDataset, TrainingRun
 from .serializers import (
     ActivationLogSerializer,
     ModelVersionSerializer,
@@ -40,10 +40,17 @@ def _error(exc: TrainingError) -> Response:
 class ModelVersionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
     """Versiones de modelos entrenados, métricas, aprobación y activación (escritura: Administrador)."""
 
-    queryset = ModelVersion.objects.select_related("approved_by")
     serializer_class = ModelVersionSerializer
     permission_classes = [IsAdminOrReadOnly]
     pagination_class = None
+
+    def get_queryset(self):
+        """Sólo los modelos guardados (aprobados o registrados offline) se listan; los pendientes se ven en
+        su entrenamiento y se pueden aprobar o rechazar por id."""
+        queryset = ModelVersion.objects.select_related("approved_by")
+        if self.action == "list":
+            queryset = queryset.exclude(approval_status=ApprovalStatus.PENDING)
+        return queryset
 
     @action(detail=True, methods=["post"], permission_classes=[IsAdminRole])
     def activate(self, request, pk=None):
@@ -76,6 +83,8 @@ class ModelVersionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, view
             version = review_version(self.get_object(), request.user, approve, payload.validated_data["notes"], request=request)
         except TrainingError as exc:
             return _error(exc)
+        if version is None:
+            return Response({"detail": "Versión rechazada y eliminada.", "deleted": True})
         return Response(ModelVersionSerializer(version).data)
 
     @action(detail=True, methods=["get"], permission_classes=[IsAdminRole])
@@ -118,14 +127,15 @@ class TrainingOverviewView(APIView):
             "config": training_config(),
             "model_status": model_status(),
             "active_model": ModelVersionSerializer(get_active_model_version()).data if get_active_model_version() else None,
-            "versions": ModelVersionSerializer(ModelVersion.objects.select_related("approved_by"), many=True).data,
+            "versions": ModelVersionSerializer(ModelVersion.objects.select_related("approved_by")
+                                               .exclude(approval_status=ApprovalStatus.PENDING), many=True).data,
             "active_run": TrainingRunSerializer(active_run).data if active_run else None,
             "last_run": TrainingRunListSerializer(last_run).data if last_run else None,
         })
 
 
 class TrainingDatasetViewSet(mixins.RetrieveModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
-    """POST multipart `file` (o JSON {"source": "reference"}): valida y registra un dataset; no entrena."""
+    """POST multipart `file`: valida y registra un dataset; no entrena."""
 
     queryset = TrainingDataset.objects.select_related("uploaded_by").defer("content")
     serializer_class = TrainingDatasetSerializer
@@ -133,10 +143,8 @@ class TrainingDatasetViewSet(mixins.RetrieveModelMixin, mixins.CreateModelMixin,
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def create(self, request, *args, **kwargs):
-        use_reference = request.data.get("source") == "reference"
         try:
-            dataset = create_dataset(request.user, uploaded_file=request.FILES.get("file"), use_reference=use_reference,
-                                     request=request)
+            dataset = create_dataset(request.user, uploaded_file=request.FILES.get("file"), request=request)
         except TrainingError as exc:
             return _error(exc)
         code = status.HTTP_201_CREATED if dataset.status == "VALIDO" else status.HTTP_422_UNPROCESSABLE_ENTITY

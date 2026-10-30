@@ -179,6 +179,12 @@ class PredictionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewse
             students = students.filter(semester=params["semester"])
         students = annotate_current_risk(students, period_code)
         students = filter_by_followup_status(students, params.get("followup_status"))
+        # El nivel de riesgo filtra TODO el resumen (tarjetas, gráficos y tabla), igual que los demás filtros.
+        risk_level = (params.get("risk_level") or "").upper()
+        if risk_level:
+            if risk_level not in RiskLevel.values:
+                raise ValidationError({"risk_level": "Nivel inválido. Use ALTO, MEDIO o BAJO."})
+            students = students.filter(current_risk_level=risk_level)
 
         level_counts = {row["current_risk_level"]: row["n"] for row in
                         students.values("current_risk_level").annotate(n=Count("id")).order_by()}
@@ -192,15 +198,20 @@ class PredictionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewse
             predictions = predictions.filter(student__program__code=params["program"])
         if params.get("semester"):
             predictions = predictions.filter(student__semester=params["semester"])
+        if risk_level:
+            predictions = predictions.filter(risk_level=risk_level)
 
         by_program: dict[str, dict] = {}
         for row in students.values("program__name", "current_risk_level").annotate(n=Count("id")).order_by():
             entry = by_program.setdefault(row["program__name"], {"program": row["program__name"], "ALTO": 0, "MEDIO": 0, "BAJO": 0, "SIN_PREDICCION": 0})
             entry[row["current_risk_level"] or "SIN_PREDICCION"] += row["n"]
 
-        attention_levels = [params["risk_level"].upper()] if params.get("risk_level") else [RiskLevel.HIGH]
-        attention = students.filter(current_risk_level__in=attention_levels).order_by("-current_probability")
-        attention_limit = min(int(params.get("limit", 10)), 50)
+        # Sin filtro de nivel ("Todos"): todos los estudiantes con predicción, de mayor a menor riesgo estimado.
+        attention = students.filter(current_risk_level__isnull=False).order_by("-current_probability")
+        try:
+            attention_limit = max(1, min(int(params.get("limit", 10)), 50))
+        except (TypeError, ValueError):
+            raise ValidationError({"limit": "Debe ser un número entero entre 1 y 50."})
 
         def pct(value):
             return round(100 * value / total, 1) if total else 0

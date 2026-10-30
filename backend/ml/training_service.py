@@ -74,7 +74,6 @@ def training_config() -> dict:
     from sipd_ml.evaluation import SELECTION_METRICS
     from sipd_ml.training import available_algorithms
 
-    reference = Path(settings.ML_REFERENCE_DATASET)
     return {
         "enabled": training_enabled(),
         "executor": executor_mode(),
@@ -100,7 +99,6 @@ def training_config() -> dict:
             "min_rows_per_class": settings.ML_TRAINING_MIN_CLASS_ROWS,
             "max_rows": settings.UPLOAD_MAX_ROWS,
             "max_mb": settings.UPLOAD_MAX_BYTES // (1024 * 1024),
-            "reference_available": reference.is_file(),
         },
         "acceptance_min_metrics": settings.ML_ACCEPTANCE_MIN_METRICS,
     }
@@ -136,41 +134,38 @@ def _validate_bytes(raw: bytes):
         return report
 
 
-def create_dataset(user, uploaded_file=None, use_reference: bool = False, request=None) -> TrainingDataset:
-    """Valida y registra un dataset de entrenamiento. No entrena ni modifica modelos."""
+def create_dataset(user, uploaded_file=None, request=None) -> TrainingDataset:
+    """Valida y registra un dataset de entrenamiento (CSV cargado). No entrena ni modifica modelos."""
     from uploads.validators import FileRejected, check_file
 
-    if use_reference:
-        path = Path(settings.ML_REFERENCE_DATASET)
-        if not path.is_file():
-            raise TrainingError("El dataset de referencia no está disponible en este servidor.", 404)
-        raw, filename, source = path.read_bytes(), path.name, DatasetSource.REFERENCE
-    else:
-        if uploaded_file is None:
-            raise TrainingError("Seleccione un archivo CSV.")
-        filename, source = uploaded_file.name or "archivo.csv", DatasetSource.UPLOAD
-        try:
-            check_file(uploaded_file)
-        except FileRejected as exc:
-            # El archivo no se guarda: sólo queda constancia del rechazo.
-            from sipd_ml.dataset_validation import DatasetReport
+    if uploaded_file is None:
+        raise TrainingError("Seleccione un archivo CSV.")
+    filename, source = uploaded_file.name or "archivo.csv", DatasetSource.UPLOAD
+    try:
+        check_file(uploaded_file)
+    except FileRejected as exc:
+        # El archivo no se guarda: sólo queda constancia del rechazo.
+        from sipd_ml.dataset_validation import DatasetReport
 
-            report = DatasetReport()
-            report.error("FILE", str(exc))
-            return _save_dataset(user, b"", filename, source, report, request)
-        raw = uploaded_file.read()
+        report = DatasetReport()
+        report.error("FILE", str(exc))
+        return _save_dataset(user, b"", filename, source, report, request)
+    raw = uploaded_file.read()
 
     return _save_dataset(user, raw, filename, source, _validate_bytes(raw), request)
 
 
 def _save_dataset(user, raw: bytes, filename: str, source: str, report, request) -> TrainingDataset:
+    """Sólo se guarda un dataset válido. Uno rechazado se devuelve sin guardar (sólo para mostrar su informe)."""
     data = report.as_dict()
-    dataset = TrainingDataset.objects.create(
+    dataset = TrainingDataset(
         source=source, filename=filename[:255], content=raw, checksum=hashlib.sha256(raw).hexdigest(),
         size_bytes=len(raw), rows=report.rows, status=DatasetStatus.VALID if report.is_valid else DatasetStatus.REJECTED,
-        report=data, is_synthetic=bool(data["summary"].get("is_synthetic")) or source == DatasetSource.REFERENCE,
+        report=data, is_synthetic=bool(data["summary"].get("is_synthetic")),
         uploaded_by=user,
     )
+    if report.is_valid:
+        dataset.save()
     log_action(AuditAction.TRAINING_DATASET, request=request, user=user, entity="TrainingDataset", entity_id=dataset.pk,
                description=f"Dataset {dataset.get_status_display().lower()}",
                metadata={"rows": dataset.rows, "errors": len(data["errors"]), "source": source})
@@ -179,8 +174,7 @@ def _save_dataset(user, raw: bytes, filename: str, source: str, report, request)
         notify([user], _REJECTION_TYPES.get(first["code"], NotificationType.DATASET_REJECTED),
                f"Dataset rechazado: {dataset.filename}", first["message"] + (
                    f" ({len(data['errors'])} problemas en total)." if len(data["errors"]) > 1 else ""),
-               level=NotificationLevel.WARNING, link="/reentrenamiento", entity="TrainingDataset",
-               entity_id=dataset.pk, dedupe_key=f"dataset-rejected-{dataset.pk}")
+               level=NotificationLevel.WARNING, link="/reentrenamiento", entity="TrainingDataset")
     return dataset
 
 
@@ -224,6 +218,7 @@ def start_run(user, dataset: TrainingDataset, algorithms: list[str], selection_m
         raise TrainingError("Este dataset ya se usó en un entrenamiento. Valide de nuevo el archivo si desea repetirlo.", 409)
 
     fail_stale_runs()
+    discard_undecided_versions()  # versiones de entrenamientos anteriores que nunca se aprobaron
     now = timezone.now()
     try:
         with transaction.atomic():
@@ -563,30 +558,66 @@ def _dataset_sha(version: ModelVersion) -> str | None:
 
 
 # ---------------------------------------------------------------------------- aprobación y activación
-def review_version(version: ModelVersion, user, approve: bool, notes: str = "", request=None) -> ModelVersion:
+def discard_version(version: ModelVersion) -> None:
+    """Elimina una versión no aprobada (artefactos y registro). Sólo se guardan los modelos aprobados:
+    una versión aprobada, heredada o que haya estado activa nunca se borra."""
+    import shutil
+
+    if version.approval_status != ApprovalStatus.PENDING or version.active \
+            or ModelActivationLog.objects.filter(new_version=version).exists():
+        raise TrainingError("Sólo pueden descartarse versiones pendientes de aprobación.", 409)
+    try:
+        shutil.rmtree(artifact_path(version.artifact_dir), ignore_errors=True)
+    except ModelNotAvailableError:
+        logger.warning("Ubicación no válida para la versión %s; se elimina sólo el registro.", version.pk)
+    version.delete()
+
+
+def discard_undecided_versions(exclude_run=None) -> int:
+    """Descarta las versiones pendientes de entrenamientos anteriores que nunca se aprobaron."""
+    pending = ModelVersion.objects.filter(approval_status=ApprovalStatus.PENDING, active=False)
+    if exclude_run is not None:
+        pending = pending.exclude(training_run=exclude_run)
+    count = 0
+    for version in pending:
+        try:
+            discard_version(version)
+            count += 1
+        except TrainingError:
+            continue
+    return count
+
+
+def review_version(version: ModelVersion, user, approve: bool, notes: str = "", request=None) -> ModelVersion | None:
+    """Aprobar guarda la versión como disponible; rechazar la elimina por completo (devuelve None)."""
     if version.approval_status != ApprovalStatus.PENDING:
         raise TrainingError(f"La versión ya está en estado «{version.get_approval_status_display()}».", 409)
     acceptance = evaluate_acceptance(version)  # se recalcula: los artefactos pudieron cambiar desde el entrenamiento
     ModelVersion.objects.filter(pk=version.pk).update(acceptance=acceptance)
     if approve and not acceptance["passed"]:
         raise TrainingError("La versión no cumple los criterios de aceptación; no puede aprobarse.", 409)
+    label, version_id, link = str(version), version.pk, _version_link(version)
     with transaction.atomic():
         version = ModelVersion.objects.select_for_update().get(pk=version.pk)
         if version.approval_status != ApprovalStatus.PENDING:
             raise TrainingError(f"La versión ya está en estado «{version.get_approval_status_display()}».", 409)
-        version.acceptance = acceptance
-        version.approval_status = ApprovalStatus.APPROVED if approve else ApprovalStatus.REJECTED
-        version.approved_by, version.approved_at, version.approval_notes = user, timezone.now(), notes[:500]
-        version.save(update_fields=["approval_status", "approved_by", "approved_at", "approval_notes", "acceptance"])
+        if approve:
+            version.acceptance = acceptance
+            version.approval_status = ApprovalStatus.APPROVED
+            version.approved_by, version.approved_at, version.approval_notes = user, timezone.now(), notes[:500]
+            version.save(update_fields=["approval_status", "approved_by", "approved_at", "approval_notes", "acceptance"])
+        else:
+            discard_version(version)  # los modelos rechazados no se guardan
+            version = None
     log_action(AuditAction.MODEL_APPROVED if approve else AuditAction.MODEL_REJECTED, request=request, user=user,
-               entity="ModelVersion", entity_id=version.pk, description=str(version))
+               entity="ModelVersion", entity_id=version_id, description=label)
     notify_admins(NotificationType.MODEL_APPROVED if approve else NotificationType.MODEL_REJECTED,
-                  f"Modelo {'aprobado' if approve else 'rechazado'}: {version}",
+                  f"Modelo {'aprobado' if approve else 'rechazado'}: {label}",
                   f"Revisado por {user.username}." + (" Puede activarse cuando lo decida." if approve else
-                                                      " La versión permanece sin activar."),
+                                                      " La versión rechazada se eliminó."),
                   level=NotificationLevel.SUCCESS if approve else NotificationLevel.WARNING,
-                  link=_version_link(version), entity="ModelVersion", entity_id=version.pk,
-                  dedupe_key=f"version-{version.pk}-reviewed")
+                  link=link, entity="ModelVersion", entity_id=version_id,
+                  dedupe_key=f"version-{version_id}-reviewed")
     return version
 
 

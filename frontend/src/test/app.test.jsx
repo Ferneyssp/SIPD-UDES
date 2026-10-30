@@ -7,13 +7,14 @@ import RiskBadge, { RiskBar } from "../components/RiskBadge";
 import { AuthProvider } from "../context/AuthContext";
 import { ConfigProvider } from "../context/ConfigContext";
 import { NAVIGATION, canAccessItem } from "../config/navigation";
-import { ADMIN, CONFIG, PERIODS, PROFESSOR, PROGRAMS, loginAs } from "./helpers";
+import { ADMIN, CONFIG, PERIODS, COORDINATOR, PROGRAMS, loginAs } from "./helpers";
 
 vi.mock("../services/api", () => ({
   cleanParams: (p) => p,
   authService: { login: vi.fn(), logout: vi.fn(), me: vi.fn(), changePassword: vi.fn() },
   catalogService: { config: vi.fn(), programs: vi.fn(), periods: vi.fn() },
   studentService: { list: vi.fn(), get: vi.fn() },
+  alertService: { summary: vi.fn(() => Promise.resolve({ open: 0, in_progress: 0, unassigned: 0, mine: 0, recent: [] })), list: vi.fn() },
   predictionService: { summary: vi.fn(), list: vi.fn(), trend: vi.fn(), history: vi.fn(), get: vi.fn() },
   modelService: { list: vi.fn() },
   followupService: { list: vi.fn(), responsibles: vi.fn() },
@@ -84,7 +85,7 @@ describe("Login", () => {
     api.authService.login.mockResolvedValue({ access: "a", refresh: "r", user: ADMIN });
     renderApp("/login");
     await userEvent.type(screen.getByLabelText(/usuario o correo/i), "admin");
-    await userEvent.type(screen.getByLabelText("Contraseña"), "SipdDemo2026*");
+    await userEvent.type(screen.getByLabelText("Contraseña"), "Clave-de-prueba#1");
     await userEvent.click(screen.getByRole("button", { name: /iniciar sesión/i }));
     expect(await screen.findByRole("heading", { name: /^Inicio/ })).toBeInTheDocument();
   });
@@ -96,8 +97,8 @@ describe("Protección de rutas", () => {
     expect(await screen.findByRole("button", { name: /iniciar sesión/i })).toBeInTheDocument();
   });
 
-  it("un profesor no puede acceder a Usuarios ni a Carga de datos", async () => {
-    loginAs(PROFESSOR);
+  it("un coordinador no puede acceder a Usuarios ni a Carga de datos", async () => {
+    loginAs(COORDINATOR);
     renderApp("/usuarios");
     expect(await screen.findByText(/no tiene permisos/i)).toBeInTheDocument();
   });
@@ -118,8 +119,8 @@ describe("Navegación", () => {
     expect(NAVIGATION.some((item) => item.path.includes("estadisticas") || item.path.includes("dashboard"))).toBe(false);
   });
 
-  it("oculta Usuarios y Carga de datos al profesor", () => {
-    const visible = NAVIGATION.filter((item) => canAccessItem(item, PROFESSOR)).map((i) => i.label);
+  it("oculta Usuarios y Carga de datos al coordinador", () => {
+    const visible = NAVIGATION.filter((item) => canAccessItem(item, COORDINATOR)).map((i) => i.label);
     expect(visible).not.toContain("Usuarios");
     expect(visible).not.toContain("Carga de datos");
     expect(NAVIGATION.filter((item) => canAccessItem(item, ADMIN)).map((i) => i.label)).toContain("Usuarios");

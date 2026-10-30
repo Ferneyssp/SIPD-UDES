@@ -7,11 +7,19 @@ logger = logging.getLogger(__name__)
 
 
 def client_ip(request) -> str | None:
+    """IP del cliente. X-Forwarded-For sólo se usa si hay TRUSTED_PROXY_COUNT proxies de confianza:
+    se toma la entrada que agregó el proxy más externo de confianza (las anteriores las puede inventar
+    el cliente)."""
     if request is None:
         return None
+    from django.conf import settings
+
+    proxies = getattr(settings, "TRUSTED_PROXY_COUNT", 0)
     forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    if proxies and forwarded:
+        hops = [hop.strip() for hop in forwarded.split(",") if hop.strip()]
+        if hops:
+            return hops[-min(proxies, len(hops))]
     return request.META.get("REMOTE_ADDR")
 
 

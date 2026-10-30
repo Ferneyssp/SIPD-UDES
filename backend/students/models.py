@@ -6,7 +6,6 @@ ANONYMOUS_CODE_REGEX = r"^E\d{3,}$"
 
 class AcademicStatus(models.TextChoices):
     ACTIVE = "Activo", "Activo"
-    PROBATION = "Prueba académica", "Prueba académica"
     INACTIVE = "Inactivo", "Inactivo"
     WITHDRAWN = "Retirado", "Retirado"
     GRADUATED = "Graduado", "Graduado"
