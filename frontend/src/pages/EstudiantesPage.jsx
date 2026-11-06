@@ -56,7 +56,7 @@ export default function EstudiantesPage() {
     setExporting(true);
     setError(null);
     try {
-      saveBlobResponse(await studentService.exportCsv(activeFilters), "sipd_estudiantes.csv");
+      saveBlobResponse(await studentService.exportCsv(activeFilters), "sade_estudiantes.csv");
     } catch (err) {
       setError(getErrorMessage(await blobErrorToJson(err), "No se pudo exportar el listado."));
     } finally {

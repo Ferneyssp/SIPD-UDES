@@ -142,6 +142,27 @@ class LoginSerializer(serializers.Serializer):
         return attrs
 
 
+class ChangeEmailSerializer(serializers.Serializer):
+    """El correo recibe la recuperación de contraseña y los reportes: cambiarlo exige la contraseña actual."""
+
+    email = serializers.EmailField(max_length=254)
+    current_password = serializers.CharField()
+
+    def validate_email(self, value):
+        value = value.strip().lower()
+        if User.objects.filter(email__iexact=value).exclude(pk=self.context["request"].user.pk).exists():
+            raise serializers.ValidationError("Ya existe un usuario con este correo.")
+        return value
+
+    def validate(self, attrs):
+        user = self.context["request"].user
+        if not user.check_password(attrs["current_password"]):
+            raise serializers.ValidationError({"current_password": "La contraseña actual no es correcta."})
+        if attrs["email"] == (user.email or "").lower():
+            raise serializers.ValidationError({"email": "El correo nuevo es igual al actual."})
+        return attrs
+
+
 class ChangePasswordSerializer(serializers.Serializer):
     current_password = serializers.CharField()
     new_password = serializers.CharField(min_length=8)

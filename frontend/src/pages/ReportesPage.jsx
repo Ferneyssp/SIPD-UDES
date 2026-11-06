@@ -125,10 +125,10 @@ export default function ReportesPage() {
       <PageHeader title="Reporte de riesgo estudiantil" description="Información calculada a partir de los registros del sistema. Los niveles de riesgo son estimaciones."
         actions={
           <>
-            <Button variant="secondary" icon={FileText} loading={downloading === "risk/pdf"} onClick={() => download("risk/pdf", "sipd_riesgo.pdf")}>Generar PDF</Button>
-            <Button variant="secondary" icon={Sheet} loading={downloading === "risk/csv"} onClick={() => download("risk/csv", "sipd_riesgo.csv")}>Exportar CSV</Button>
+            <Button variant="secondary" icon={FileText} loading={downloading === "risk/pdf"} onClick={() => download("risk/pdf", "sade_riesgo.pdf")}>Generar PDF</Button>
+            <Button variant="secondary" icon={Sheet} loading={downloading === "risk/csv"} onClick={() => download("risk/csv", "sade_riesgo.csv")}>Exportar CSV</Button>
             {isAdmin && (
-              <Button variant="ghost" icon={FileDown} loading={downloading === "risk/students/csv"} onClick={() => download("risk/students/csv", "sipd_riesgo_individual.csv")}
+              <Button variant="ghost" icon={FileDown} loading={downloading === "risk/students/csv"} onClick={() => download("risk/students/csv", "sade_riesgo_individual.csv")}
                 title="Listado individual con códigos seudonimizados (sólo Administrador)">CSV individual</Button>
             )}
           </>
@@ -147,7 +147,6 @@ export default function ReportesPage() {
       {report.loading && !report.data && <Loading message="Generando reporte..." />}
       {report.data && !report.error && (
         <div className={`report-body ${report.loading ? "is-refreshing" : ""}`}>
-          {report.data.scope_restricted && <Alert type="info">El reporte incluye sólo los programas asignados a su usuario.</Alert>}
           <RiskReport report={report.data} />
         </div>
       )}

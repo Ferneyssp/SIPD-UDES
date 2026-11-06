@@ -4,7 +4,7 @@ from followups.models import FollowUp
 
 
 class FollowUpTests(SipdAPITestCase):
-    payload = {"student": "E001", "status": "PENDIENTE", "intervention_type": "TUTORIA",
+    payload = {"student": "E001", "status": "PENDIENTE", "intervention_type": "COORDINACION",
                "observation": "Se programa tutoría de refuerzo en cálculo."}
 
     def test_coordinator_registers_followup_for_own_student(self):

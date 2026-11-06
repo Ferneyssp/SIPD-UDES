@@ -12,7 +12,7 @@ import { ADMIN, CONFIG, COORDINATOR, PERIODS, PROGRAMS, loginAs } from "./helper
 
 vi.mock("../services/api", () => ({
   cleanParams: (p) => p,
-  authService: { login: vi.fn(), logout: vi.fn(), me: vi.fn(), changePassword: vi.fn(), requestPasswordReset: vi.fn(), confirmPasswordReset: vi.fn() },
+  authService: { login: vi.fn(), logout: vi.fn(), me: vi.fn(), changePassword: vi.fn(), changeEmail: vi.fn(), requestPasswordReset: vi.fn(), confirmPasswordReset: vi.fn() },
   catalogService: { config: vi.fn(), programs: vi.fn(), periods: vi.fn() },
   studentService: { list: vi.fn(), get: vi.fn(), exportCsv: vi.fn() },
   predictionService: { summary: vi.fn(), get: vi.fn(), history: vi.fn(), run: vi.fn(), list: vi.fn() },
@@ -189,8 +189,8 @@ describe("Inicio accionable", () => {
 });
 
 const FOLLOWUP = {
-  id: 7, student: "E001", program: "Ingeniería de Sistemas", follow_up_date: "2026-10-20", intervention_type: "TUTORIA",
-  intervention_type_display: "Tutoría académica", observation: "Plan de refuerzo acordado.", user: 2, user_name: "Coordinación",
+  id: 7, student: "E001", program: "Ingeniería de Sistemas", follow_up_date: "2026-10-20", intervention_type: "COORDINACION",
+  intervention_type_display: "Seguimiento por coordinación", observation: "Plan de refuerzo acordado.", user: 2, user_name: "Coordinación",
   status: "EN_SEGUIMIENTO", status_display: "En seguimiento",
 };
 
@@ -205,16 +205,24 @@ describe("Historial y seguimiento", () => {
     expect(within(card).getByRole("button", { name: /registrar seguimiento/i })).toBeInTheDocument();
   });
 
-  it("Historial muestra el seguimiento del estudiante y ya no la evolución institucional", async () => {
-    api.predictionService.history.mockResolvedValue({
-      student: { id: 1, anonymous_code: "E001", program: "Ingeniería de Sistemas", semester: 6 }, timeline: [],
-    });
-    api.followupService.list.mockResolvedValue({ count: 1, results: [FOLLOWUP] });
+  it("la búsqueda de estudiantes sólo aparece en Estudiantes y Predicciones", async () => {
+    api.studentService.list.mockResolvedValue({ count: 0, results: [] });
+    api.followupService.list.mockResolvedValue({ count: 0, results: [] });
+    loginAs(COORDINATOR);
+    const { unmount } = renderApp("/estudiantes");
+    expect(await screen.findByRole("search")).toBeInTheDocument();
+    unmount();
+    renderApp("/seguimiento");
+    expect(await screen.findByRole("heading", { level: 1, name: "Seguimiento de estudiantes" })).toBeInTheDocument();
+    expect(screen.queryByRole("search")).not.toBeInTheDocument();
+  });
+
+  it("el módulo Historial ya no existe: no está en el menú y su ruta lleva a Estudiantes", async () => {
+    api.studentService.list.mockResolvedValue({ count: 0, results: [] });
     loginAs(COORDINATOR);
     renderApp("/historial?student=E001");
-    expect(await screen.findByRole("heading", { name: "Historial de seguimiento" })).toBeInTheDocument();
-    expect(screen.queryByText(/Evolución institucional/)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /editar/i })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Estudiantes" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Historial" })).not.toBeInTheDocument();
   });
 
   it("Seguimiento pide sólo el último registro de cada estudiante y permite editarlo", async () => {
@@ -266,11 +274,25 @@ describe("Contraseña", () => {
     api.authService.changePassword.mockResolvedValue({ detail: "ok" });
     loginAs(COORDINATOR);
     renderApp("/perfil");
-    await userEvent.type(await screen.findByLabelText(/contraseña actual/i), "Actual#2026xx");
-    await userEvent.type(screen.getByLabelText(/^nueva contraseña/i), "Nueva#2026xxx");
-    await userEvent.type(screen.getByLabelText(/confirmar/i), "Nueva#2026xxx");
-    await userEvent.click(screen.getByRole("button", { name: /cambiar contraseña|actualizar contraseña|guardar/i }));
+    const card = within((await screen.findByRole("heading", { name: "Cambiar contraseña" })).closest("section"));
+    await userEvent.type(card.getByLabelText(/contraseña actual/i), "Actual#2026xx");
+    await userEvent.type(card.getByLabelText(/^nueva contraseña/i), "Nueva#2026xxx");
+    await userEvent.type(card.getByLabelText(/confirmar/i), "Nueva#2026xxx");
+    await userEvent.click(card.getByRole("button", { name: /actualizar contraseña/i }));
     expect(await screen.findByText(/Contraseña actualizada correctamente/)).toBeInTheDocument();
+  });
+
+  it("el perfil permite cambiar el correo propio y ya no muestra el último acceso", async () => {
+    api.authService.changeEmail.mockResolvedValue({ detail: "Correo actualizado.", user: { ...COORDINATOR, email: "nuevo@udes.edu.co" } });
+    loginAs(COORDINATOR);
+    renderApp("/perfil");
+    const card = within((await screen.findByRole("heading", { name: "Cambiar correo" })).closest("section"));
+    expect(screen.queryByText("Último acceso")).not.toBeInTheDocument();
+    await userEvent.type(card.getByLabelText("Correo nuevo"), " nuevo@udes.edu.co ");
+    await userEvent.type(card.getByLabelText(/contraseña actual/i), "Actual#2026xx");
+    await userEvent.click(card.getByRole("button", { name: "Actualizar correo" }));
+    expect(api.authService.changeEmail).toHaveBeenCalledWith({ email: "nuevo@udes.edu.co", current_password: "Actual#2026xx" });
+    expect(await card.findByText(/llegarán a nuevo@udes.edu.co/)).toBeInTheDocument();
   });
 
   it("solicitar recuperación muestra la respuesta genérica", async () => {

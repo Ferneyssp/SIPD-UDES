@@ -212,7 +212,7 @@ class PdfReport:
                     self.line(2 * cm, A4[1] - 1.5 * cm, A4[0] - 2 * cm, A4[1] - 1.5 * cm)
                     self.setFont("Helvetica-Bold", 8.5)
                     self.setFillColor(colors.HexColor(NAVY))
-                    self.drawString(2 * cm, A4[1] - 1.3 * cm, "SIPD · Sistema de Predicción y Seguimiento del Riesgo de Deserción")
+                    self.drawString(2 * cm, A4[1] - 1.3 * cm, "SADE · Sistema de Alerta para la Deserción Estudiantil")
                     self.setFont("Helvetica", 8)
                     self.setFillColor(colors.HexColor(MUTED))
                     self.drawRightString(A4[0] - 2 * cm, A4[1] - 1.3 * cm, institution[:70])
@@ -223,7 +223,7 @@ class PdfReport:
 
         buffer = io.BytesIO()
         document = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=2 * cm, rightMargin=2 * cm, topMargin=2.2 * cm,
-                                     bottomMargin=2 * cm, title=title, author="SIPD")
+                                     bottomMargin=2 * cm, title=title, author="SADE")
         head = [Paragraph(title, self.styles["title"])]
         if subtitle:
             from xml.sax.saxutils import escape
@@ -283,8 +283,6 @@ def risk_pdf(report: dict) -> bytes:
         pdf.table(["Modelo", "Versión", "Predicciones"], [[m["model"], m["version"], m["predictions"]] for m in report["models"]])
     pdf.heading("Fuente de los datos y limitaciones")
     pdf.paragraph(report["source"])
-    if report["scope_restricted"]:
-        pdf.paragraph("El reporte se limita a los programas asignados al usuario que lo generó.")
     for notice in report["notices"]:
         pdf.paragraph(notice, "muted")
     return pdf.render()

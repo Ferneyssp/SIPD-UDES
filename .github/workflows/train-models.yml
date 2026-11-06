@@ -1,4 +1,4 @@
-# Entrenador del SIPD en GitHub Actions (gratuito).
+# Entrenador de SADE en GitHub Actions (gratuito).
 #
 # 1. En la web (Reentrenamiento) el administrador valida el dataset e inicia el entrenamiento: la ejecución
 #    queda "en cola" en la base de datos (ML_TRAINING_EXECUTOR=github) y el backend lanza este flujo.

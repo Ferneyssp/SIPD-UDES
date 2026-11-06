@@ -1,4 +1,4 @@
-import { KeyRound } from "lucide-react";
+import { KeyRound, Mail } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Alert from "../components/Alert";
@@ -10,9 +10,52 @@ import StatusBadge from "../components/StatusBadge";
 import { useAuth } from "../context/AuthContext";
 import { authService } from "../services/api";
 import { getErrorMessage, getFieldErrors } from "../utils/errors";
-import { formatDate, formatDateTime, initials } from "../utils/format";
+import { formatDate, initials } from "../utils/format";
 
 const EMPTY = { current_password: "", new_password: "", confirm_password: "" };
+const EMPTY_EMAIL = { email: "", current_password: "" };
+
+/** Cambio del correo propio: recibe la recuperación de contraseña y los reportes automáticos. */
+function ChangeEmailCard() {
+  const { refreshProfile } = useAuth();
+  const [form, setForm] = useState(EMPTY_EMAIL);
+  const [errors, setErrors] = useState({});
+  const [message, setMessage] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const update = (field) => (event) => setForm((f) => ({ ...f, [field]: event.target.value }));
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setErrors({});
+    setMessage(null);
+    setSaving(true);
+    try {
+      const result = await authService.changeEmail({ ...form, email: form.email.trim() });
+      await refreshProfile();
+      setForm(EMPTY_EMAIL);
+      setMessage({ type: "success", text: `${result.detail} Los avisos y reportes llegarán a ${result.user.email}.` });
+    } catch (err) {
+      setErrors(getFieldErrors(err));
+      setMessage({ type: "error", text: getErrorMessage(err, "No se pudo cambiar el correo.") });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card title="Cambiar correo" subtitle="A este correo llegan la recuperación de contraseña y los reportes automáticos.">
+      <form className="stack" onSubmit={submit}>
+        {message && <Alert type={message.type}>{message.text}</Alert>}
+        <Input label="Correo nuevo" type="email" autoComplete="email" value={form.email}
+          onChange={update("email")} required error={errors.email} />
+        <Input label="Contraseña actual" type="password" autoComplete="current-password" value={form.current_password}
+          onChange={update("current_password")} required error={errors.current_password}
+          hint="Se pide para confirmar que es usted quien hace el cambio." />
+        <Button type="submit" icon={Mail} loading={saving}>Actualizar correo</Button>
+      </form>
+    </Card>
+  );
+}
 
 export default function PerfilPage() {
   const { user, logoutLocal } = useAuth();
@@ -64,23 +107,25 @@ export default function PerfilPage() {
             <div><dt>Rol</dt><dd>{user.role_display}</dd></div>
             <div><dt>Programas asignados</dt><dd>{user.programs?.length ? user.programs.map((p) => p.name).join(", ") : "Todos / no aplica"}</dd></div>
             <div><dt>Fecha de creación</dt><dd>{formatDate(user.created_at)}</dd></div>
-            <div><dt>Último acceso</dt><dd>{formatDateTime(user.last_login)}</dd></div>
             <div><dt>Estado</dt><dd><StatusBadge className={user.is_active ? "status-success" : "status-muted"} label={user.is_active ? "Activo" : "Inactivo"} /></dd></div>
           </dl>
         </Card>
-        <Card title="Cambiar contraseña" subtitle="Al cambiarla se cerrará la sesión y deberá ingresar nuevamente.">
-          <form className="stack" onSubmit={submit}>
-            {error && <Alert type="error">{error}</Alert>}
-            <Input label="Contraseña actual" type="password" autoComplete="current-password" value={form.current_password}
-              onChange={update("current_password")} required error={errors.current_password} />
-            <Input label="Nueva contraseña" type="password" autoComplete="new-password" value={form.new_password}
-              onChange={update("new_password")} required minLength={8} error={errors.new_password}
-              hint="Mínimo 8 caracteres; evite contraseñas comunes o sólo numéricas." />
-            <Input label="Confirmar nueva contraseña" type="password" autoComplete="new-password" value={form.confirm_password}
-              onChange={update("confirm_password")} required error={errors.confirm_password} />
-            <Button type="submit" icon={KeyRound} loading={saving}>Actualizar contraseña</Button>
-          </form>
-        </Card>
+        <div className="stack">
+          <ChangeEmailCard />
+          <Card title="Cambiar contraseña" subtitle="Al cambiarla se cerrará la sesión y deberá ingresar nuevamente.">
+            <form className="stack" onSubmit={submit}>
+              {error && <Alert type="error">{error}</Alert>}
+              <Input label="Contraseña actual" type="password" autoComplete="current-password" value={form.current_password}
+                onChange={update("current_password")} required error={errors.current_password} />
+              <Input label="Nueva contraseña" type="password" autoComplete="new-password" value={form.new_password}
+                onChange={update("new_password")} required minLength={8} error={errors.new_password}
+                hint="Mínimo 8 caracteres; evite contraseñas comunes o sólo numéricas." />
+              <Input label="Confirmar nueva contraseña" type="password" autoComplete="new-password" value={form.confirm_password}
+                onChange={update("confirm_password")} required error={errors.confirm_password} />
+              <Button type="submit" icon={KeyRound} loading={saving}>Actualizar contraseña</Button>
+            </form>
+          </Card>
+        </div>
       </div>
     </>
   );

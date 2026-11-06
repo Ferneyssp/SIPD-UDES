@@ -1,4 +1,4 @@
-# SIPD - ejecución completa: PostgreSQL + Django (API + inferencia ML) + React (Nginx)
+# SADE - ejecución completa: PostgreSQL + Django (API + inferencia ML) + React (Nginx)
 #   cp .env.example .env   (y complete SECRET_KEY, DB_PASSWORD, DEMO_PASSWORD)
 #   docker compose up --build
 #   Aplicación: http://localhost:5173   API: http://localhost:8000/api/
@@ -79,7 +79,7 @@ services:
       context: ./frontend
       args:
         VITE_API_URL: /api
-        VITE_APP_NAME: ${VITE_APP_NAME:-SIPD}
+        VITE_APP_NAME: ${VITE_APP_NAME:-SADE}
         VITE_INSTITUTION_NAME: ${VITE_INSTITUTION_NAME:-Institución de Educación Superior}
     restart: unless-stopped
     depends_on:

@@ -20,7 +20,7 @@ from . import exporters, services
 
 
 def _filename(prefix: str, extension: str) -> str:
-    return f"sipd_{prefix}_{timezone.localtime():%Y%m%d_%H%M}.{extension}"
+    return f"sade_{prefix}_{timezone.localtime():%Y%m%d_%H%M}.{extension}"
 
 
 def _log_export(request, report: str, file_format: str, filters: dict):

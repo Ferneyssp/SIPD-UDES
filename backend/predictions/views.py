@@ -19,6 +19,7 @@ from students.serializers import StudentListSerializer
 from users.permissions import IsAdminRole
 
 from .models import Prediction, PredictionStatus
+from .report_emails import send_program_reports
 from .serializers import (
     BatchPredictionRequestSerializer,
     PredictionDetailSerializer,
@@ -114,7 +115,13 @@ class PredictionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewse
         log_action(AuditAction.PREDICTION_RUN, request=request, entity="AcademicPeriod", entity_id=period.code,
                    metadata={"count": total, "program": payload.validated_data.get("program") or "todos"})
         notify_predictions_completed(request.user, period.code, total, program_ids)
-        return Response({"detail": f"Se generaron {total} predicciones para {period.code}.", "predictions_generated": total})
+        emails = send_program_reports(period.code, program_ids, payload.validated_data.get("program")) if total             else {"sent": 0, "failed": 0}
+        detail = f"Se generaron {total} predicciones para {period.code}."
+        if emails["sent"]:
+            detail += f" Se envió el reporte por correo a {emails['sent']} coordinador(es)."
+        if emails["failed"]:
+            detail += f" No se pudo enviar el correo a {emails['failed']} coordinador(es); revise la configuración de correo."
+        return Response({"detail": detail, "predictions_generated": total, "report_emails": emails})
 
     # ------------------------------------------------------------------ historial
     @action(detail=False, methods=["get"])

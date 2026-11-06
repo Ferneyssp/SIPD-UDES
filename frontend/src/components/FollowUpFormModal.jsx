@@ -34,7 +34,7 @@ export default function FollowUpFormModal({ open, onClose, onSaved, followup, st
       user: String(followup.user), status: followup.status, follow_up_date: followup.follow_up_date,
     } : {
       // El Administrador nunca es responsable: debe elegir un coordinador.
-      student: studentCode || "", intervention_type: "TUTORIA", observation: "", user: user.role === ROLES.COORDINATOR ? String(user.id) : "",
+      student: studentCode || "", intervention_type: "COORDINACION", observation: "", user: user.role === ROLES.COORDINATOR ? String(user.id) : "",
       status: "PENDIENTE", follow_up_date: today(),
     });
   }, [open, followup, studentCode, user.id]);

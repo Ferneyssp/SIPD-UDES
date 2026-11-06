@@ -1,7 +1,7 @@
-export const APP_NAME = import.meta.env.VITE_APP_NAME || "SIPD";
+export const APP_NAME = import.meta.env.VITE_APP_NAME || "SADE";
 export const INSTITUTION_NAME = import.meta.env.VITE_INSTITUTION_NAME || "Institución de Educación Superior";
-export const SYSTEM_TITLE = "Sistema de Predicción y Seguimiento del Riesgo de Deserción";
-export const SYSTEM_DESCRIPTION = "Sistema de Predicción y Seguimiento del Riesgo de Deserción Estudiantil";
+export const SYSTEM_TITLE = "Sistema de Alerta para la Deserción Estudiantil";
+export const SYSTEM_DESCRIPTION = "Sistema de Alerta para la Deserción Estudiantil";
 
 export const ROLES = {
   ADMIN: "ADMIN",

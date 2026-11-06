@@ -24,7 +24,7 @@ export default function SeguimientoPage() {
   const [modal, setModal] = useState({ open: false, followup: null });
   const page = Number(filters.page || 1);
   const { data, loading, error, reload } = useApi(
-    // Un registro por estudiante (su último seguimiento); el historial completo está en Historial y en la ficha.
+    // Un registro por estudiante (su último seguimiento); el historial completo está en la ficha del estudiante.
     () => followupService.list({ ...filters, nuevo: undefined, latest: "true", page, page_size: PAGE_SIZE }),
     [JSON.stringify(filters)],
     { errorMessage: "Error al cargar los seguimientos." },
@@ -55,7 +55,7 @@ export default function SeguimientoPage() {
       <PageHeader
         title="Seguimiento de estudiantes"
         badge={data ? `${formatNumber(data.count)} estudiantes` : null}
-        description="Último seguimiento de cada estudiante. Use Editar para actualizar su estado; el historial completo está en Historial y en la ficha."
+        description="Último seguimiento de cada estudiante. Use Editar para actualizar su estado; el historial completo está en la ficha del estudiante."
         actions={<Button icon={Plus} onClick={() => setModal({ open: true, followup: null })}>Nueva intervención</Button>}
       />
       <FilterBar onClear={clearFilters} hasActive={Object.keys(filters).some((k) => k !== "page" && k !== "nuevo")}>

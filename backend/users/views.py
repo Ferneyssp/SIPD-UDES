@@ -13,7 +13,7 @@ from audit.services import log_action
 
 from .models import Role, User
 from .permissions import CanManageUsers
-from .serializers import ChangePasswordSerializer, LoginSerializer, ProfileSerializer, UserSerializer
+from .serializers import ChangeEmailSerializer, ChangePasswordSerializer, LoginSerializer, ProfileSerializer, UserSerializer
 from .tokens import (
     REFRESH_COOKIE,
     REMEMBER_COOKIE,
@@ -109,6 +109,20 @@ class MeView(APIView):
 
     def get(self, request):
         return Response(ProfileSerializer(request.user).data)
+
+
+class ChangeEmailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = ChangeEmailSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        previous = request.user.email
+        request.user.email = serializer.validated_data["email"]
+        request.user.save(update_fields=["email", "updated_at"])
+        log_action(AuditAction.EMAIL_CHANGED, request=request, entity="User", entity_id=request.user.pk,
+                   metadata={"previous": previous, "new": request.user.email})
+        return Response({"detail": "Correo actualizado.", "user": ProfileSerializer(request.user).data})
 
 
 class ChangePasswordView(APIView):

@@ -10,7 +10,7 @@ import FollowUpFormModal from "./FollowUpFormModal";
 import StatusBadge from "./StatusBadge";
 
 /**
- * Historial de seguimiento de un estudiante (perfil e Historial). Es de sólo lectura: cada intervención
+ * Historial de seguimiento de un estudiante (ficha del estudiante). Es de sólo lectura: cada intervención
  * queda registrada y sólo se pueden agregar nuevas. El último registro se actualiza desde Seguimiento.
  */
 export default function FollowUpHistory({ studentCode, onSaved }) {

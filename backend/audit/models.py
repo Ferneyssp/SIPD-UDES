@@ -9,6 +9,7 @@ class AuditAction(models.TextChoices):
     PASSWORD_CHANGED = "PASSWORD_CHANGED", "Cambio de contraseña"
     PASSWORD_RESET_REQUESTED = "PASSWORD_RESET_REQ", "Solicitud de recuperación de contraseña"
     PASSWORD_RESET = "PASSWORD_RESET", "Restablecimiento de contraseña"
+    EMAIL_CHANGED = "EMAIL_CHANGED", "Cambio de correo"
     DATA_UPLOAD = "DATA_UPLOAD", "Carga de datos"
     PREDICTION_RUN = "PREDICTION_RUN", "Ejecución de predicciones"
     MODEL_ACTIVATED = "MODEL_ACTIVATED", "Activación de modelo"

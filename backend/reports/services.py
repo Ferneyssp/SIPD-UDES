@@ -115,7 +115,7 @@ def risk_report(user, params) -> dict:
         "by_semester": _grouped(queryset.exclude(academic_record__isnull=True), "academic_record__semester", "semester"),
         "models": [{"model": m["model_name"], "version": m["model_version_label"], "predictions": m["predictions"]}
                    for m in models],
-        "source": "Predicciones vigentes almacenadas por SIPD (una por estudiante y periodo).",
+        "source": "Predicciones vigentes almacenadas por SADE (una por estudiante y periodo).",
         "notices": notices,
     }
 

@@ -11,7 +11,7 @@ from predictions.views import PredictionViewSet
 from students.views import StudentViewSet
 from uploads.views import DataUploadViewSet
 from users.password_reset import PasswordResetConfirmView, PasswordResetRequestView
-from users.views import ChangePasswordView, CookieTokenRefreshView, LoginView, LogoutView, MeView, UserViewSet
+from users.views import ChangeEmailView, ChangePasswordView, CookieTokenRefreshView, LoginView, LogoutView, MeView, UserViewSet
 
 from .views import HealthView, SystemConfigView
 
@@ -35,6 +35,7 @@ auth_patterns = [
     path("logout/", LogoutView.as_view(), name="logout"),
     path("me/", MeView.as_view(), name="me"),
     path("change-password/", ChangePasswordView.as_view(), name="change-password"),
+    path("change-email/", ChangeEmailView.as_view(), name="change-email"),
     path("password-reset/", PasswordResetRequestView.as_view(), name="password-reset"),
     path("password-reset/confirm/", PasswordResetConfirmView.as_view(), name="password-reset-confirm"),
 ]

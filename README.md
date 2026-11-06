@@ -1,4 +1,4 @@
-# SIPD — Sistema de Predicción y Seguimiento del Riesgo de Deserción Estudiantil
+# SADE — Sistema de Alerta para la Deserción Estudiantil
 
 MVP académico (proyecto de grado) que estima el **riesgo de deserción** de estudiantes mediante modelos de
 Machine Learning y apoya el **seguimiento** por parte de coordinadores académicos y administradores.
@@ -15,7 +15,7 @@ Frontend (React + Vite) ──REST/JWT──▶ Backend (Django + DRF) ──▶
       Entrenamiento: offline (ml/scripts, notebooks) o desde la web (Admin, en segundo plano)
 ```
 
-Menú agrupado por tarea: **Analizar** (Inicio · Estudiantes · Predicciones (Admin) · Historial · Reportes) ·
+Menú agrupado por tarea: **Analizar** (Inicio · Estudiantes · Predicciones (Admin) · Reportes) ·
 **Atender** (Alertas · Seguimiento) · **Administrar** (Carga de datos · Reentrenamiento · Usuarios; Admin) ·
 **Cuenta** (Notificaciones · Perfil). **No existe** módulo "Dashboard" ni "Estadísticas": el resumen vive en **Inicio**.
 Ver [§21](#21-referencia-civitas-learning-y-cambios-de-la-versión) para la relación con *Institutional Impact Platform*.
@@ -336,7 +336,7 @@ los mismos programas):
 
 | Acción | Administrador | Coordinador académico |
 |---|:-:|:-:|
-| Inicio, estudiantes, historial, ficha | ✅ todos los estudiantes | ✅ sólo los de sus programas asignados (sin programas: ninguno) |
+| Inicio, estudiantes, ficha | ✅ todos los estudiantes | ✅ sólo los de sus programas asignados (sin programas: ninguno) |
 | Módulo Predicciones | ✅ | — |
 | Alertas tempranas (consulta) y su gestión mediante el seguimiento | ✅ | ✅ (sus programas) |
 | Registrar / editar seguimiento | ✅ (eligiendo un coordinador como responsable) | ✅ (sus programas) |
@@ -550,13 +550,13 @@ Tomando como referencia la investigación sobre *Institutional Impact Platform* 
 cadena **dato → predicción con nivel y cambio → lista priorizada → ficha con factores → acción registrada**, sin
 copiar su escala ni cambiar el modelo, los umbrales (0,30 / 0,60) ni el sentido del puntaje (alto = riesgo):
 
-| Civitas (documentado) | SIPD |
+| Civitas (documentado) | SADE |
 |---|---|
 | Cambio semanal de la predicción como dato y filtro | **Cambio frente a la predicción vigente del periodo anterior** (puntos porcentuales) en listado, ficha, Inicio y alertas; filtro *Tendencia* y orden *Mayor aumento* |
 | Lista de trabajo priorizada y filtros avanzados | Listado ordenado por defecto de mayor a menor riesgo, filtros como etiquetas removibles, exportación CSV del listado filtrado |
 | Ficha con *Inspiration* / *Intervention* | Factores separados en "asociadas a mayor riesgo" y "a menor riesgo"; icono ℹ con los rangos vigentes; leyenda "estimación, no certeza" |
 | Alertas con responsable, comentario y resolución | **Alertas tempranas** automáticas (nivel Alto o aumento ≥ `ALERT_RISE_THRESHOLD`), una por estudiante y periodo, gestionadas **con el seguimiento del estudiante** ("Gestionar seguimiento" abre el formulario de intervención): al registrarlo la alerta pasa a *En atención* con el coordinador responsable, y al marcarlo *Atendido* o *Cerrado* la alerta se cierra con su observación; aviso agregado a los coordinadores del programa |
-| Buscador en el encabezado | Búsqueda global por código que abre la ficha |
+| Buscador en el encabezado | Búsqueda por código que abre la ficha; sólo en *Estudiantes* (y la ficha) y *Predicciones* |
 | Menú por tareas (*Connect / Advise / Report*) | Menú agrupado en Analizar / Atender / Administrar / Cuenta |
 | Visibilidad por rol y unidad, *fail-closed* | Coordinador limitado a sus programas; sin programas no ve estudiantes |
 | No mostrar la predicción al estudiante | Aviso en la gestión de alertas |
@@ -569,8 +569,21 @@ bandas, citas y calendario, mensajería por correo o SMS y análisis de impacto 
 los gráficos y la tabla de estudiantes que requieren atención.
 
 **Seguimiento e historial.** *Seguimiento* muestra un registro por estudiante (su último seguimiento, con el estado
-actual) y *Editar* lo actualiza. El historial completo de intervenciones se consulta en *Historial* (al buscar un
-estudiante) y en la ficha, donde sólo se puede **registrar** un seguimiento nuevo, no editar los anteriores.
+actual) y *Editar* lo actualiza. El historial completo de intervenciones y la evolución del riesgo se consultan en la
+ficha del estudiante, donde sólo se puede **registrar** un seguimiento nuevo, no editar los anteriores (el módulo
+*Historial* se retiró; `/historial` redirige a *Estudiantes*). Los tipos de intervención son tres: **Remitido a
+PAIPE**, **Remitido a bienestar** y **Seguimiento por coordinación** (por defecto). La migración
+`followups.0003` conserva "bienestar" y convierte los tipos anteriores en *Seguimiento por coordinación*.
+
+**Reporte automático a coordinadores.** Al ejecutar la predicción de un periodo (*Predicciones → Ejecutar
+predicciones*), cada coordinador activo con correo y programas incluidos recibe en su correo registrado el resumen
+de **sus** programas (estudiantes y niveles Alto/Medio/Bajo) con el PDF del reporte de riesgo adjunto, generado con
+su alcance. Si un correo falla, la predicción no se afecta: el mensaje de resultado indica cuántos se enviaron y el
+error queda en el registro. La predicción individual de un estudiante no envía correo. Requiere el correo
+configurado ([§22](#22-recuperación-de-contraseña-por-correo-gmail)).
+
+**Perfil.** Cada usuario puede cambiar su correo (pide la contraseña actual, valida que no lo use otra cuenta y
+queda en auditoría como *Cambio de correo*). El perfil ya no muestra el último acceso.
 
 **Modelos disponibles (Predicciones).** Una fila por algoritmo (Regresión Logística, Random Forest, XGBoost) con un
 selector de versión; las métricas y el botón *Activar* corresponden a la versión elegida.
@@ -586,7 +599,7 @@ Al cambiar la contraseña desde *Perfil*, la sesión se cierra y el inicio de se
 
 1. Cree una cuenta dedicada (por ejemplo `sipd.udes@gmail.com`); evite usar un correo personal.
 2. En *Cuenta de Google → Seguridad*, active la **Verificación en dos pasos**.
-3. En *Seguridad → Contraseñas de aplicaciones*, cree una para "SIPD". Google muestra 16 caracteres: esa es la
+3. En *Seguridad → Contraseñas de aplicaciones*, cree una para "SADE". Google muestra 16 caracteres: esa es la
    contraseña que usará el sistema (no la de la cuenta).
 4. Defina las variables en `backend/.env` (o en Vercel / el servidor):
 
@@ -594,7 +607,7 @@ Al cambiar la contraseña desde *Perfil*, la sesión se cierra y el inicio de se
    |---|---|
    | `EMAIL_HOST_USER` | `sipd.udes@gmail.com` |
    | `EMAIL_HOST_PASSWORD` | la contraseña de aplicación (sin espacios) |
-   | `DEFAULT_FROM_EMAIL` | `SIPD UDES <sipd.udes@gmail.com>` |
+   | `DEFAULT_FROM_EMAIL` | `SADE UDES <sipd.udes@gmail.com>` |
    | `FRONTEND_URL` | dirección pública de la aplicación (va en el enlace), p. ej. `https://sipd.vercel.app` |
    | `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS` | ya vienen como `smtp.gmail.com`, `587`, `True` |
 

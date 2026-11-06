@@ -217,3 +217,27 @@ class ClientIpTests(SipdAPITestCase):
     def test_uses_entry_added_by_trusted_proxy(self):
         # El cliente inventa "1.2.3.4"; el proxy de confianza agrega la IP real al final.
         self.assertEqual(client_ip(self._request("1.2.3.4, 203.0.113.9")), "203.0.113.9")
+
+
+class ChangeEmailTests(SipdAPITestCase):
+    def change(self, user, **payload):
+        return self.client_for(user).post("/api/auth/change-email/", payload, format="json")
+
+    def test_user_changes_own_email_with_current_password(self):
+        response = self.change(self.coordinator_sis, email=" Nuevo.Correo@Test.local ", current_password=PASSWORD)
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["user"]["email"], "nuevo.correo@test.local")
+        self.coordinator_sis.refresh_from_db()
+        self.assertEqual(self.coordinator_sis.email, "nuevo.correo@test.local")
+        self.assertTrue(AuditLog.objects.filter(action=AuditAction.EMAIL_CHANGED, entity_id=str(self.coordinator_sis.pk)).exists())
+
+    def test_rejects_wrong_password_duplicate_and_invalid_email(self):
+        wrong = self.change(self.coordinator_sis, email="otro@test.local", current_password="incorrecta")
+        self.assertIn("current_password", wrong.data["errors"])
+        duplicate = self.change(self.coordinator_sis, email="COORD@test.local", current_password=PASSWORD)
+        self.assertIn("email", duplicate.data["errors"])
+        invalid = self.change(self.coordinator_sis, email="no-es-correo", current_password=PASSWORD)
+        self.assertIn("email", invalid.data["errors"])
+        self.coordinator_sis.refresh_from_db()
+        self.assertEqual(self.coordinator_sis.email, "sis@test.local")
+        self.assertEqual(self.client.post("/api/auth/change-email/", {"email": "x@test.local"}, format="json").status_code, 401)

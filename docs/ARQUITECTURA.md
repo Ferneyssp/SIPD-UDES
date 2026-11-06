@@ -1,4 +1,4 @@
-# Documentación técnica — SIPD
+# Documentación técnica — SADE
 
 ## 1. Arquitectura
 
@@ -69,6 +69,7 @@ Paginación: `?page=&page_size=` (máx. 100).
 | POST | `/api/auth/password-reset/` | `{email}` → envía un enlace de recuperación (respuesta siempre igual; 5 solicitudes/hora) | Público |
 | POST | `/api/auth/password-reset/confirm/` | `{uid, token, new_password, confirm_password}` → cambia la contraseña y cierra las sesiones | Público (enlace de un solo uso, 30 min) |
 | POST | `/api/auth/change-password/` | Cambio de contraseña | Autenticado |
+| POST | `/api/auth/change-email/` | `{email, current_password}` → cambia el correo propio | Autenticado |
 | GET | `/api/config/` | Umbrales, catálogos, etiquetas de variables | Autenticado |
 | GET/POST/PATCH | `/api/users/` | Gestión de usuarios (DELETE = desactivar) | Admin |
 | GET | `/api/programs/`, `/api/periods/` | Catálogos | Autenticado |
@@ -81,7 +82,7 @@ Paginación: `?page=&page_size=` (máx. 100).
 | GET | `/api/predictions/` | Filtros: `period, program, risk_level, model, date_from, date_to, student, status` | Según ámbito |
 | GET | `/api/predictions/{id}/` | Incluye variables de entrada y explicación | Según ámbito |
 | POST | `/api/predictions/` | `{student, academic_period?}` → predicción | Admin |
-| POST | `/api/predictions/run-batch/` | `{academic_period, program?}` | Admin |
+| POST | `/api/predictions/run-batch/` | `{academic_period, program?}`; envía a cada coordinador el reporte de sus programas (`report_emails: {sent, failed}`) | Admin |
 | GET | `/api/predictions/history/?student=E001` | Evolución temporal | Según ámbito |
 | GET | `/api/predictions/trend/` | % por nivel en cada periodo | Según ámbito |
 | GET | `/api/predictions/summary/` | Datos de **Inicio**; `risk_level` filtra tarjetas, gráficos y tabla | Según ámbito |

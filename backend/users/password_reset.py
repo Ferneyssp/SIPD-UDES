@@ -53,26 +53,26 @@ def send_reset_email(user) -> None:
     link = reset_link(user)
     minutes = settings.PASSWORD_RESET_TIMEOUT // 60
     name = user.display_name
-    subject = "SIPD · Restablecer contraseña"
+    subject = "SADE · Restablecer contraseña"
     text = (
         f"Hola {name}:\n\n"
-        "Recibimos una solicitud para restablecer la contraseña de su cuenta en SIPD.\n"
+        "Recibimos una solicitud para restablecer la contraseña de su cuenta en SADE.\n"
         f"Abra este enlace (válido por {minutes} minutos y de un solo uso):\n\n{link}\n\n"
         "Si usted no hizo la solicitud, ignore este mensaje: su contraseña no cambiará.\n\n"
-        f"SIPD · {settings.INSTITUTION_NAME}"
+        f"SADE · {settings.INSTITUTION_NAME}"
     )
     logo = f"{settings.FRONTEND_URL.rstrip('/')}/escudo-udes.png"
     html = f"""<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;color:#1f2a37">
   <div style="text-align:center;padding:16px"><img src="{escape(logo)}" alt="UDES" width="72" height="72"></div>
   <h2 style="color:#1d3a5c;margin:0 0 12px">Restablecer contraseña</h2>
   <p>Hola {escape(name)}:</p>
-  <p>Recibimos una solicitud para restablecer la contraseña de su cuenta en SIPD.</p>
+  <p>Recibimos una solicitud para restablecer la contraseña de su cuenta en SADE.</p>
   <p style="text-align:center;margin:24px 0">
     <a href="{escape(link)}" style="background:#1d3a5c;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:bold">Crear nueva contraseña</a>
   </p>
   <p style="font-size:13px;color:#4a5563">El enlace es válido por {minutes} minutos y sólo puede usarse una vez.
   Si usted no hizo la solicitud, ignore este mensaje: su contraseña no cambiará.</p>
-  <p style="font-size:12px;color:#6b7684">SIPD · {escape(settings.INSTITUTION_NAME)}</p>
+  <p style="font-size:12px;color:#6b7684">SADE · {escape(settings.INSTITUTION_NAME)}</p>
 </div>"""
     message = EmailMultiAlternatives(subject, text, settings.DEFAULT_FROM_EMAIL, [user.email])
     message.attach_alternative(html, "text/html")

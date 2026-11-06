@@ -108,3 +108,55 @@ class PredictionApiTests(SipdAPITestCase):
         data = self.client_for(self.coordinator_sis).get("/api/config/").data
         self.assertEqual(data["risk_thresholds"], {"low": 0.3, "medium": 0.6})
         self.assertEqual([level["code"] for level in data["risk_levels"]], ["BAJO", "MEDIO", "ALTO"])
+
+
+class CoordinatorReportEmailTests(SipdAPITestCase):
+    def run_batch(self, **extra):
+        return self.client_for(self.admin).post("/api/predictions/run-batch/", {"academic_period": "2026-2", **extra},
+                                                format="json")
+
+    def test_each_coordinator_receives_report_of_own_programs(self):
+        from django.core import mail
+
+        response = self.run_batch()
+        self.assertEqual(response.data["report_emails"], {"sent": 2, "failed": 0})
+        self.assertIn("2 coordinador(es)", response.data["detail"])
+        by_recipient = {message.to[0]: message for message in mail.outbox}
+        self.assertEqual(set(by_recipient), {"coord@test.local", "sis@test.local"})  # el administrador no recibe
+        sis = by_recipient["sis@test.local"]
+        self.assertIn("2026-2", sis.subject)
+        self.assertIn("Estudiantes con predicción vigente: 1", sis.body)  # sólo su programa (SIS)
+        self.assertNotIn("Ingeniería Civil", sis.body)
+        name, content, mimetype = sis.attachments[0]
+        self.assertEqual(mimetype, "application/pdf")
+        self.assertTrue(content.startswith(b"%PDF"))
+        self.assertIn("Estudiantes con predicción vigente: 2", by_recipient["coord@test.local"].body)
+
+    def test_single_program_run_only_emails_coordinators_of_that_program(self):
+        from django.core import mail
+
+        self.assertEqual(self.run_batch(program="CIV").data["report_emails"]["sent"], 1)
+        self.assertEqual(mail.outbox[0].to, ["coord@test.local"])
+        self.assertIn("Estudiantes con predicción vigente: 1", mail.outbox[0].body)
+
+    def test_coordinators_without_email_or_inactive_are_skipped(self):
+        from django.core import mail
+
+        self.coordinator.is_active = False
+        self.coordinator.save(update_fields=["is_active"])
+        self.coordinator_sis.email = ""
+        self.coordinator_sis.save(update_fields=["email"])
+        response = self.run_batch()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["report_emails"], {"sent": 0, "failed": 0})
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_email_failure_does_not_break_prediction(self):
+        from unittest import mock
+
+        with mock.patch("django.core.mail.EmailMultiAlternatives.send", side_effect=OSError("SMTP caído")), \
+                self.assertLogs("predictions.report_emails", level="ERROR"):
+            response = self.run_batch()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["predictions_generated"], 2)
+        self.assertEqual(response.data["report_emails"], {"sent": 0, "failed": 2})

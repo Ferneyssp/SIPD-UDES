@@ -11,13 +11,9 @@ class FollowUpStatus(models.TextChoices):
 
 
 class InterventionType(models.TextChoices):
-    TUTORING = "TUTORIA", "Tutoría académica"
-    PHONE_CALL = "LLAMADA", "Llamada telefónica"
-    WELLBEING = "BIENESTAR", "Remisión a bienestar"
-    GUARDIAN_MEETING = "ACUDIENTE", "Reunión con acudiente"
-    FINANCIAL = "FINANCIERO", "Apoyo financiero"
-    COUNSELING = "CONSEJERIA", "Consejería académica"
-    OTHER = "OTRO", "Otro"
+    PAIPE = "PAIPE", "Remitido a PAIPE"
+    WELLBEING = "BIENESTAR", "Remitido a bienestar"
+    COORDINATION = "COORDINACION", "Seguimiento por coordinación"
 
 
 class FollowUp(models.Model):
@@ -32,7 +28,7 @@ class FollowUp(models.Model):
     academic_period = models.ForeignKey(
         "academic.AcademicPeriod", null=True, blank=True, on_delete=models.SET_NULL, related_name="followups"
     )
-    intervention_type = models.CharField(max_length=20, choices=InterventionType.choices, default=InterventionType.TUTORING)
+    intervention_type = models.CharField(max_length=20, choices=InterventionType.choices, default=InterventionType.COORDINATION)
     status = models.CharField(max_length=20, choices=FollowUpStatus.choices, default=FollowUpStatus.PENDING)
     observation = models.TextField(max_length=2000)
     follow_up_date = models.DateField(default=timezone.localdate)

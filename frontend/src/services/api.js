@@ -18,6 +18,7 @@ export const authService = {
   logout: () => data(apiClient.post("/auth/logout/")),
   me: () => data(apiClient.get("/auth/me/")),
   changePassword: (payload) => data(apiClient.post("/auth/change-password/", payload)),
+  changeEmail: (payload) => data(apiClient.post("/auth/change-email/", payload)),
   requestPasswordReset: (email) => data(apiClient.post("/auth/password-reset/", { email })),
   confirmPasswordReset: (payload) => data(apiClient.post("/auth/password-reset/confirm/", payload)),
 };

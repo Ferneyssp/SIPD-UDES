@@ -6,7 +6,6 @@ import MainLayout from "./layouts/MainLayout";
 import CargaDatosPage from "./pages/CargaDatosPage";
 import EstudianteDetallePage from "./pages/EstudianteDetallePage";
 import EstudiantesPage from "./pages/EstudiantesPage";
-import HistorialPage from "./pages/HistorialPage";
 import InicioPage from "./pages/InicioPage";
 import LoginPage from "./pages/LoginPage";
 import NotFoundPage from "./pages/NotFoundPage";
@@ -44,7 +43,7 @@ export default function App() {
           path="/predicciones"
           element={<ProtectedRoute roles={[ROLES.ADMIN]}><PrediccionesPage /></ProtectedRoute>}
         />
-        <Route path="/historial" element={<HistorialPage />} />
+        <Route path="/historial" element={<Navigate to="/estudiantes" replace />} />
         <Route path="/seguimiento" element={<SeguimientoPage />} />
         <Route path="/reportes" element={<ReportesPage />} />
         <Route path="/alertas" element={<AlertasPage />} />

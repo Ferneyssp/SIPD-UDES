@@ -40,9 +40,9 @@ PERIODS = [
 ]
 DEMO_USERS = [
     # username, email, nombre, apellido, rol, programas
-    ("admin", "admin@sipd.demo", "Administrador", "Demo", Role.ADMIN, []),
-    ("coordinador", "coordinador@sipd.demo", "Coordinación", "Sistemas", Role.COORDINATOR, ["SIS", "SOF"]),
-    ("coordinador2", "coordinador2@sipd.demo", "Coordinación", "Civil", Role.COORDINATOR, ["CIV", "IND", "ELE"]),
+    ("admin", "admin@sade.demo", "Administrador", "Demo", Role.ADMIN, []),
+    ("coordinador", "coordinador@sade.demo", "Coordinación", "Sistemas", Role.COORDINATOR, ["SIS", "SOF"]),
+    ("coordinador2", "coordinador2@sade.demo", "Coordinación", "Civil", Role.COORDINATOR, ["CIV", "IND", "ELE"]),
 ]
 OBSERVATIONS = [
     "Se programó plan de estudio con tutor asignado para reforzar asignaturas básicas.",
@@ -92,7 +92,7 @@ class Command(BaseCommand):
                 )
                 if created:
                     user.set_password(password)
-                    # Acceso a /admin sí, superusuario no: los permisos los da el rol de SIPD.
+                    # Acceso a /admin sí, superusuario no: los permisos los da el rol de SADE.
                     user.is_staff = role == Role.ADMIN
                     user.is_superuser = False
                     user.save()
@@ -155,7 +155,7 @@ class Command(BaseCommand):
             .select_related("student").order_by("-probability")[:45]
         )
         statuses = list(FollowUpStatus.values)
-        types = list(InterventionType.values)[:-1]
+        types = list(InterventionType.values)
         for index, prediction in enumerate(high_risk):
             if index % 3 == 2:
                 continue  # algunos estudiantes quedan sin seguimiento

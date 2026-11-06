@@ -97,7 +97,7 @@ class DataUploadViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins
     @action(detail=False, methods=["get"])
     def template(self, request):
         response = HttpResponse(template_csv(), content_type="text/csv; charset=utf-8")
-        response["Content-Disposition"] = 'attachment; filename="plantilla_carga_sipd.csv"'
+        response["Content-Disposition"] = 'attachment; filename="plantilla_carga_sade.csv"'
         return response
 
     @action(detail=False, methods=["get"])

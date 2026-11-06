@@ -1,13 +1,18 @@
 import { Menu } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { SYSTEM_TITLE } from "../config/appConfig";
 import { useAuth } from "../context/AuthContext";
 import { initials } from "../utils/format";
 import GlobalSearch from "./GlobalSearch";
 import NotificationBell from "./NotificationBell";
 
+// La búsqueda de estudiantes sólo tiene sentido en los módulos que trabajan con estudiantes individuales.
+const SEARCH_SECTIONS = ["/estudiantes", "/predicciones"];
+
 export default function Topbar({ subtitle, onToggleMenu }) {
   const { user } = useAuth();
+  const { pathname } = useLocation();
+  const showSearch = SEARCH_SECTIONS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
   return (
     <header className="topbar">
       <button type="button" className="icon-button menu-toggle" onClick={onToggleMenu} aria-label="Abrir menú">
@@ -17,7 +22,7 @@ export default function Topbar({ subtitle, onToggleMenu }) {
         <p className="topbar-system">{SYSTEM_TITLE}</p>
         {subtitle && <p className="topbar-subtitle">{subtitle}</p>}
       </div>
-      <GlobalSearch />
+      {showSearch && <GlobalSearch />}
       <NotificationBell />
       <Link to="/perfil" className="topbar-user" aria-label="Ver perfil">
         <span className="avatar" aria-hidden="true">{initials(user)}</span>

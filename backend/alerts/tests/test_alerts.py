@@ -70,7 +70,7 @@ class AlertApiTests(SipdAPITestCase):
     def test_alert_is_managed_through_followup(self):
         """Registrar el seguimiento pone la alerta "En atención"; marcarlo Atendido la cierra con su observación."""
         client = self.client_for(self.coordinator_sis)
-        payload = {"student": "E001", "status": "PENDIENTE", "intervention_type": "TUTORIA",
+        payload = {"student": "E001", "status": "PENDIENTE", "intervention_type": "COORDINACION",
                    "observation": "Se contactó al estudiante y se programó tutoría."}
         created = client.post("/api/followups/", payload, format="json")
         self.assertEqual(created.status_code, 201, created.data)

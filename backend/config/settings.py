@@ -1,5 +1,5 @@
 """
-Configuración de Django para SIPD.
+Configuración de Django para SADE.
 
 Todos los valores sensibles se leen de variables de entorno (.env).
 """
@@ -104,7 +104,7 @@ EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", "")
 EMAIL_TIMEOUT = int(env("EMAIL_TIMEOUT", "15"))
 EMAIL_BACKEND = env("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend" if EMAIL_HOST_USER
                     else "django.core.mail.backends.console.EmailBackend")
-DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", f"SIPD <{EMAIL_HOST_USER}>" if EMAIL_HOST_USER else "SIPD <no-reply@localhost>")
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", f"SADE <{EMAIL_HOST_USER}>" if EMAIL_HOST_USER else "SADE <no-reply@localhost>")
 # Dirección pública del frontend: se usa en el enlace del correo de recuperación.
 # En Vercel, sin FRONTEND_URL, se usa el dominio de producción del proyecto (el frontend se sirve ahí mismo).
 _VERCEL_PRODUCTION_HOST = env("VERCEL_PROJECT_PRODUCTION_URL") if ON_VERCEL else None

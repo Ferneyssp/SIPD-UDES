@@ -92,7 +92,7 @@ export default function CargaDatosPage() {
       const url = URL.createObjectURL(response.data);
       const link = document.createElement("a");
       link.href = url;
-      link.download = "plantilla_carga_sipd.csv";
+      link.download = "plantilla_carga_sade.csv";
       link.click();
       URL.revokeObjectURL(url);
     } catch (err) {

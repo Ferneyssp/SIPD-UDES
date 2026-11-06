@@ -1,4 +1,4 @@
-import { ArrowLeft, BellRing, History } from "lucide-react";
+import { ArrowLeft, BellRing } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import Card from "../components/Card";
 import DataTable from "../components/DataTable";
@@ -109,11 +109,6 @@ export default function EstudianteDetallePage() {
         title={`Estudiante ${data.anonymous_code}`}
         badge={data.current_prediction_period ? `Periodo ${data.current_prediction_period}` : null}
         description={`${data.program} · Semestre ${data.semester}`}
-        actions={
-          <>
-            <Link className="btn btn-secondary btn-md" to={`/historial?student=${data.anonymous_code}`}><History size={16} /> <span>Ver historial</span></Link>
-          </>
-        }
       />
 
       <div className="grid-3">
