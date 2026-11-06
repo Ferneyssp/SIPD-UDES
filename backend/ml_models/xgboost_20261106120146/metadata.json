@@ -1,8 +1,8 @@
 {
   "name": "XGBoost",
   "algorithm": "xgboost",
-  "version": "20261030191607",
-  "trained_at": "2026-10-31T00:16:08.966374+00:00",
+  "version": "20261106120146",
+  "trained_at": "2026-11-06T17:01:47.757727+00:00",
   "metrics": {
     "accuracy": 0.815,
     "precision": 0.6296,
@@ -73,7 +73,7 @@
     "positive_rate_train": 0.2567,
     "threshold": 0.3
   },
-  "training_run_id": 1,
+  "training_run_id": 2,
   "dataset_sha256": "01ad41d2f90f8122f359d659c7b865acecfaca758d65233a0495cf95c404464b",
   "dataset_source": "CARGA"
 }
