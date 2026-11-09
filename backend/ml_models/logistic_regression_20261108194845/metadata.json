@@ -1,8 +1,8 @@
 {
   "name": "Regresión Logística",
   "algorithm": "logistic_regression",
-  "version": "20261106120146",
-  "trained_at": "2026-11-06T17:01:47.720619+00:00",
+  "version": "20261108194845",
+  "trained_at": "2026-11-09T00:48:46.311111+00:00",
   "metrics": {
     "accuracy": 0.77,
     "precision": 0.5439,
@@ -73,7 +73,7 @@
     "positive_rate_train": 0.2567,
     "threshold": 0.3
   },
-  "training_run_id": 2,
+  "training_run_id": 3,
   "dataset_sha256": "01ad41d2f90f8122f359d659c7b865acecfaca758d65233a0495cf95c404464b",
   "dataset_source": "CARGA"
 }
